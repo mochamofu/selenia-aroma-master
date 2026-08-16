@@ -23,7 +23,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
+import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
+import { usePrivateBaseRecipes } from "@/hooks/usePrivateBaseRecipes";
+import { useViewerRole } from "@/hooks/useViewerRole";
+import { canDisclose, disclosureLevelForRole, DISCLOSURE_DESCRIPTIONS } from "@/lib/disclosure";
+import type { BrainwaveScreenshot, BrainwaveSession } from "@/types/brainwave";
 import { essentialOils } from "@/data/essentialOils";
 import type { AromaRecord, BaseBlend, EssentialOil } from "@/types/aroma";
 import type { Profile } from "@/types/profile";
@@ -139,7 +145,6 @@ type EssentialOilForm = {
 };
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
-const BASE_BLEND_ADMIN_PASSWORD = "selenia";
 
 const emptyCustomerForm: CustomerForm = {
   name: "",
@@ -486,20 +491,6 @@ const operatorAromas: OperatorRecord[] = [
   }),
 ];
 
-const privateBlendNotes: Record<string, { ratio: string; note: string }> = {
-  "base-01": { ratio: "4 : 4 : 1", note: "やわらかいフローラル軸。夜向けの初回提案に使いやすい。" },
-  "base-02": { ratio: "8 : 3 : 1", note: "ウッディとハーブが強め。眠り前より回復感の設計に向く。" },
-  "base-03": { ratio: "10 : 1 : 1", note: "樹脂系を中心にした重めの余韻。少量添加から調整。" },
-  "base-04": { ratio: "4 : 3 : 1", note: "明るいフローラル。ティートリーで清潔感を足している。" },
-  "base-05": { ratio: "4 : 7 : 1", note: "ラベンダー優位。測定後の緊張傾向が強い場合の候補。" },
-  "base-07": { ratio: "5 : 3 : 2", note: "森林感がある鎮静系。呼吸を整えるテーマに合わせやすい。" },
-  "base-09": { ratio: "5 : 3 : 2", note: "集中系。ミント添加時は刺激が強くなりすぎないようにする。" },
-  "base-10": { ratio: "3 : 2", note: "軽いシトラス。朝・作業前の記録に合わせやすい。" },
-  "base-12": { ratio: "5 : 3 : 2", note: "睡眠前の深い落ち着き向け。甘さが出すぎないよう調整。" },
-  "base-15": { ratio: "2 : 2 : 1", note: "疲労感や活動前の印象作り。ジュニパーのドライ感を活かす。" },
-  "base-16": { ratio: "2 : 1 : 2", note: "フローラルとハーバルのバランス型。香りの好み確認が重要。" },
-  "base-17": { ratio: "3 : 1 : 6", note: "オレンジが強めで明るい。甘さの強い追加オイルは控えめに。" },
-};
 
 const moodFilters = [
   { slug: "all", label: "すべて" },
@@ -534,6 +525,11 @@ const initialOperatorRecord = operatorAromas[0];
 
 export default function OperatorKartePage() {
   const localIdCounter = useRef(1);
+  // 事業者向けデモURLを直接開けるよう、ここではログイン必須にしない。
+  // 内部比率の可否はサーバー側で再判定される。
+  const { role: viewerRole } = useViewerRole();
+  const disclosureLevel = disclosureLevelForRole(viewerRole);
+  const canSeeInternalRatios = canDisclose(disclosureLevel, "internal");
   const [customCustomers, setCustomCustomers] = useState<Profile[]>([]);
   const [customBaseBlends, setCustomBaseBlends] = useState<BaseBlend[]>([]);
   const [customBaseNotes, setCustomBaseNotes] = useState<Record<string, { ratio: string; note: string }>>({});
@@ -545,7 +541,6 @@ export default function OperatorKartePage() {
   const customers = useMemo(() => [...operatorCustomers, ...customCustomers], [customCustomers]);
   const allBaseBlends = useMemo(() => [...demoBaseBlends, ...customBaseBlends], [customBaseBlends]);
   const allEssentialOils = useMemo(() => [...essentialOils, ...customEssentialOils], [customEssentialOils]);
-  const allBaseNotes = useMemo(() => ({ ...privateBlendNotes, ...customBaseNotes }), [customBaseNotes]);
   const [activeTab, setActiveTab] = useState<AppTab>("karte");
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.user_id ?? "");
   const [brainwaveImages, setBrainwaveImages] = useState<BrainwaveImage[]>(initialImages);
@@ -565,10 +560,17 @@ export default function OperatorKartePage() {
   const [oilMood, setOilMood] = useState("all");
   const [savedDrafts, setSavedDrafts] = useState<SavedDraft[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<HistorySelection | null>({ kind: "record", id: operatorAromas[0]?.id ?? "" });
-  const [baseSecretsUnlocked, setBaseSecretsUnlocked] = useState(false);
-  const [showBaseAdminGate, setShowBaseAdminGate] = useState(false);
-  const [baseAdminPassword, setBaseAdminPassword] = useState("");
-  const [baseAdminError, setBaseAdminError] = useState("");
+  const [showInternalRatios, setShowInternalRatios] = useState(false);
+  const {
+    recipes: privateRecipes,
+    loading: privateRecipesLoading,
+    error: privateRecipesError,
+  } = usePrivateBaseRecipes(canSeeInternalRatios && showInternalRatios);
+  // 比率はサーバーから取得できたときだけ表示する。UIフラグだけでは開かない。
+  const baseSecretsUnlocked = canSeeInternalRatios && showInternalRatios && !privateRecipesError;
+  const allBaseNotes = useMemo(() => ({ ...privateRecipes, ...customBaseNotes }), [privateRecipes, customBaseNotes]);
+  const [brainwaveSessions, setBrainwaveSessions] = useState<BrainwaveSession[]>([]);
+  const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>([]);
   const [toast, setToast] = useState("");
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? customers[0];
@@ -815,24 +817,12 @@ export default function OperatorKartePage() {
     setToast(`${name}をベースブレンド図鑑に追加しました。`);
   }
 
-  function unlockBaseBlendSecrets() {
-    if (baseAdminPassword.trim() === BASE_BLEND_ADMIN_PASSWORD) {
-      setBaseSecretsUnlocked(true);
-      setShowBaseAdminGate(false);
-      setBaseAdminPassword("");
-      setBaseAdminError("");
-      setToast("管理者表示を有効化しました。");
-      return;
-    }
-    setBaseAdminError("パスワードが違います。");
-  }
-
-  function lockBaseBlendSecrets() {
-    setBaseSecretsUnlocked(false);
-    setShowBaseAdminGate(false);
-    setBaseAdminPassword("");
-    setBaseAdminError("");
-    setToast("管理者表示を閉じました。");
+  function toggleInternalRatios() {
+    setShowInternalRatios((open) => {
+      const next = !open;
+      setToast(next ? "内部比率の表示を要求しました。" : "内部比率の表示を閉じました。");
+      return next;
+    });
   }
 
   function addEssentialOil() {
@@ -1006,6 +996,16 @@ export default function OperatorKartePage() {
                     </div>
                   </div>
                 </section>
+
+                <BrainwaveIntakePanel
+                  customerId={selectedCustomerId}
+                  customerName={selectedCustomer?.name ?? "利用者"}
+                  sessions={brainwaveSessions}
+                  screenshots={brainwaveScreenshots}
+                  onSessionsChange={setBrainwaveSessions}
+                  onScreenshotsChange={setBrainwaveScreenshots}
+                  onToast={setToast}
+                />
 
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><ListTree className="h-5 w-5 text-[#8d6fd1]" />過去の診断・制作履歴</h2>
@@ -1222,55 +1222,38 @@ export default function OperatorKartePage() {
                     <Plus className="h-4 w-4" />
                     ベース追加
                   </button>
-                  <div className="relative">
+                  {canSeeInternalRatios ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowBaseAdminGate((open) => !open);
-                        setBaseAdminError("");
-                      }}
-                      className={`grid h-8 w-8 place-items-center rounded-lg border transition ${baseSecretsUnlocked ? "border-[#d8c7ef] text-[#8d6fd1] opacity-75" : "border-transparent text-[#bfb5cc] opacity-45 hover:opacity-80"}`}
-                      aria-label="管理者設定"
+                      onClick={toggleInternalRatios}
+                      className={`flex h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${showInternalRatios ? "border-[#d8c7ef] bg-[#f6f2fd] text-[#6b57a0]" : "border-[#ded7ec] bg-white text-[#7b7088] hover:border-[#b7a5dd]"}`}
                     >
-                      {baseSecretsUnlocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                      {showInternalRatios ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                      {showInternalRatios ? "内部比率を隠す" : "内部比率を表示"}
                     </button>
-                    {showBaseAdminGate ? (
-                      <div className="absolute right-0 top-10 z-30 w-64 rounded-lg border border-[#e4dff0] bg-white p-3 text-xs shadow-xl">
-                        <label className="block font-bold text-[#665a78]">
-                          管理者パスワード
-                          <input
-                            type="password"
-                            value={baseAdminPassword}
-                            onChange={(event) => {
-                              setBaseAdminPassword(event.target.value);
-                              setBaseAdminError("");
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") unlockBaseBlendSecrets();
-                            }}
-                            className="mt-2 h-9 w-full rounded-lg border border-[#ddd6ea] px-3 text-sm outline-none focus:border-[#8d6fd1]"
-                            autoComplete="off"
-                          />
-                        </label>
-                        {baseAdminError ? <p className="mt-2 text-[11px] font-bold text-[#a34f37]">{baseAdminError}</p> : null}
-                        <div className="mt-3 flex justify-end gap-2">
-                          {baseSecretsUnlocked ? (
-                            <button type="button" onClick={lockBaseBlendSecrets} className="h-8 rounded-lg border border-[#ded7ec] px-3 font-bold text-[#665a78]">
-                              閉じる
-                            </button>
-                          ) : null}
-                          <button type="button" onClick={unlockBaseBlendSecrets} className="h-8 rounded-lg bg-[#3b3152] px-3 font-bold text-white">
-                            解除
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+                  ) : (
+                    <span className="flex h-10 items-center gap-2 rounded-lg border border-[#ded7ec] bg-white px-3 text-xs font-bold text-[#a79dba]">
+                      <Lock className="h-3.5 w-3.5" />
+                      内部比率は管理者のみ
+                    </span>
+                  )}
                 </div>
               </div>
+              {canSeeInternalRatios && showInternalRatios && privateRecipesError ? (
+                <p className="mb-4 rounded-lg bg-[#fdeaef] p-3 text-xs font-bold text-[#a8506e]">
+                  {privateRecipesError}
+                </p>
+              ) : null}
+              {canSeeInternalRatios && showInternalRatios && privateRecipesLoading ? (
+                <p className="mb-4 rounded-lg bg-[#f8f5fd] p-3 text-xs text-[#665a78]">内部比率を取得しています…</p>
+              ) : null}
+              <p className="mb-4 rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
+                現在の表示範囲: {DISCLOSURE_DESCRIPTIONS[disclosureLevel]}
+              </p>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {allBaseBlends.map((blend) => {
                   const privateNote = allBaseNotes[blend.id];
+                  const guide = getBaseBlendGuide(blend.id);
                   return (
                     <article key={blend.id} className="rounded-lg border border-[#e4dff0] bg-white p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -1282,14 +1265,24 @@ export default function OperatorKartePage() {
                       </div>
                       <p className="mt-3 text-sm leading-6 text-[#665a78]">{formatOperatorBaseDescription(blend.description)}</p>
                       <InfoLine label="目的カテゴリ" value={blend.benefits.join(" / ")} />
+                      <InfoLine label="構成精油" value={blend.public_ingredients.join(" / ")} />
+                      {guide && canDisclose(disclosureLevel, "instructor") ? (
+                        <div className="mt-3 space-y-2 rounded-lg bg-[#faf7ff] p-3 text-xs leading-5 text-[#6f637f]">
+                          <p><span className="font-bold text-[#3b3152]">使い分け:</span> {guide.instructor.selectionGuide}</p>
+                          <p>
+                            <span className="font-bold text-[#3b3152]">相性:</span>{" "}
+                            {guide.instructor.pairingOils.map((oil) => oil.name).join(" / ")}
+                          </p>
+                          <p className="text-[#8a4a60]">
+                            <span className="font-bold">事前確認:</span> {guide.instructor.contraindications[0]}
+                          </p>
+                        </div>
+                      ) : null}
                       {baseSecretsUnlocked ? (
-                        <>
-                          <InfoLine label="構成精油" value={blend.public_ingredients.join(" / ")} />
-                          <div className="mt-3 rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#6f637f]">
-                            <p><span className="font-bold text-[#3b3152]">内部比率:</span> {privateNote?.ratio ?? "未設定"}</p>
-                            <p className="mt-1">{privateNote?.note}</p>
-                          </div>
-                        </>
+                        <div className="mt-3 rounded-lg bg-[#fdeaef] p-3 text-xs leading-5 text-[#6f637f]">
+                          <p><span className="font-bold text-[#3b3152]">内部比率:</span> {privateNote?.ratio ?? "未設定"}</p>
+                          <p className="mt-1">{privateNote?.note}</p>
+                        </div>
                       ) : null}
                     </article>
                   );

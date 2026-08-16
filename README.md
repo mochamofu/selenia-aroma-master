@@ -34,6 +34,8 @@
 | 本番化仕様 | `docs/web-app-production-spec.md` |
 | 精油カタログ | `docs/oil-catalog-database.md` |
 | 内部ベースブレンド資料 | `docs/base-blend-recipes-internal.md` |
+| 開示ポリシー（3段階） | `docs/disclosure-policy.md` |
+| 脳波データ取り込み仕様 | `docs/brainwave-data-intake.md` |
 | 非エンジニア向けデモガイド | `docs/demo-start-guide.md` |
 
 公開URLは現行デモの記録です。環境やVercelのデプロイ状態によって表示内容・認証状態が変わるため、共有前に`/operator`と`/dashboard`を確認してください。
@@ -47,7 +49,7 @@
 - `/aromas/[id]/reorder`: 再購入前の確認画面
 - `/moods` / `/moods/[mood]`: 目的・気分別の香り探索
 - `/oils/[slug]`: 追加精油36種類の図鑑ページ
-- `/base-blends` / `/base-blends/[id]`: ベースブレンド図鑑
+- `/base-blends` / `/base-blends/[id]`: ベースブレンド図鑑（香りの印象・使うシーン・使い分け指針まで解説）
 - `/profile`: プロフィール、お気に入り、ログアウト
 - `/admin`: 管理者ダッシュボード、顧客・制作記録の入口
 - `/operator`: 脳波画像、複数回の診断・制作履歴、ヒアリング回答、配合記録を紐づける事業者向けカルテ
@@ -59,7 +61,10 @@
 - 脳波画像のタイトル表示、拡大確認、アップロード想定（画像上限10MB）
 - 総量を5mL / 10mLなどで指定し、各材料を比率から自動換算
 - 単位をμL / mLで切り替え
-- ベースブレンドの内部比率は通常画面に表示せず、管理者解除後だけ表示
+- 脳波CSVの取り込み、7波形（リラックス / 集中 / α / β / γ / δ / θ）のグラフ描画
+- iPadスクリーンショットの一括取り込みと、重複グラフの自動除外
+- ベースブレンド情報の3段階開示（利用者 / 認定インストラクター / 管理者）
+- 内部配合比率はサーバー側のみで保持し、管理者のみ取得できる
 - 妊娠、妊活、出産直後、服薬などの禁忌・注意フラグをヒアリング結果に保持
 
 ## ローカル起動
@@ -195,6 +200,9 @@ Codex、Claude、GLMなど別のエージェントで作業するときは、最
 2. SQL Editorで`supabase/schema.sql`を実行
 3. Storageに`aroma-images` bucketを作成
 4. Authのメール/パスワードログインを有効化
-5. `profiles.role`に`customer`または`admin`を設定
+5. `profiles.role`に`customer`、`instructor`、`admin`のいずれかを設定
+6. Storageに`brainwave-screenshots`と`raw-brainwave-csv` bucketを作成
 
-本番公開ではデモモードを無効化し、管理者パスワードや内部比率をクライアントコードへ埋め込まない構成へ移行してください。
+本番公開ではデモモードを無効化してください。内部配合比率は `src/server/baseBlendPrivateRecipes.ts`
+（`server-only`）と `/api/base-blends/private` に隔離済みで、クライアントバンドルには含まれません。
+開示範囲の考え方は[開示ポリシー](docs/disclosure-policy.md)を参照してください。
