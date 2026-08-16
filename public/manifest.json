@@ -1,0 +1,16 @@
+{
+  "name": "Selenia Aroma",
+  "short_name": "Selenia",
+  "description": "セレニアアロマ制作記録PWA",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#FAF7F1",
+  "theme_color": "#B9A6D8",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

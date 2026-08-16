@@ -1,0 +1,66 @@
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  Camera,
+  Check,
+  ChevronRight,
+  ExternalLink,
+  Filter,
+  FlaskConical,
+  Heart,
+  Home,
+  ImagePlus,
+  Layers,
+  LogOut,
+  Menu,
+  Moon,
+  MoreHorizontal,
+  Search,
+  Settings,
+  Sparkles,
+  Sun,
+  Target,
+  Upload,
+  User,
+  Users,
+  Wind,
+} from "lucide-react";
+
+const icons = {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  Camera,
+  Check,
+  ChevronRight,
+  ExternalLink,
+  Filter,
+  FlaskConical,
+  Heart,
+  Home,
+  ImagePlus,
+  Layers,
+  LogOut,
+  Menu,
+  Moon,
+  MoreHorizontal,
+  Search,
+  Settings,
+  Sparkles,
+  Sun,
+  Target,
+  Upload,
+  User,
+  Users,
+  Wind,
+};
+
+export type IconName = keyof typeof icons;
+
+export function Icon({ name, className }: { name: IconName | string; className?: string }) {
+  const Component = icons[name as IconName] ?? Sparkles;
+  return <Component aria-hidden="true" className={className ?? "h-5 w-5"} strokeWidth={2.2} />;
+}
