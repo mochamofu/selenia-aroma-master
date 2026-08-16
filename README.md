@@ -37,8 +37,23 @@
 | 開示ポリシー（3段階） | `docs/disclosure-policy.md` |
 | 脳波データ取り込み仕様 | `docs/brainwave-data-intake.md` |
 | 非エンジニア向けデモガイド | `docs/demo-start-guide.md` |
+| 開発環境セットアップ（Mac/Win） | `docs/development-setup.md` |
+| Vercelデプロイ運用 | `docs/vercel-deployment.md` |
 
 公開URLは現行デモの記録です。環境やVercelのデプロイ状態によって表示内容・認証状態が変わるため、共有前に`/operator`と`/dashboard`を確認してください。
+
+## 対応環境
+
+Webアプリなので、OSを問わず同じコードが動きます。
+
+| 端末 | 想定する使い方 | 状態 |
+|---|---|---|
+| iPhone | 利用者向け画面（`/dashboard`）。ホーム画面に追加してPWAとして使う | 対応済み |
+| iPad | 事業者向けカルテ（`/operator`）。FocusCalmの測定端末と同じiPadで開く | 対応済み（縦2カラム / 横2カラム / 1280px以上で3カラム） |
+| Mac / Windows PC | カルテの管理作業、開発 | 対応済み |
+
+ノッチ・ホームインジケーターのセーフエリア、iOSの入力欄オートズーム抑止、
+`100dvh` によるアドレスバー対応を入れてあります。
 
 ## 現在の機能
 
@@ -69,18 +84,15 @@
 
 ## ローカル起動
 
-Node.js 22系で確認しています。
+Node.js 22系で確認しています。macOS / Windows どちらでも同じ手順です。
 
-```powershell
+```bash
 npm install
 npm run dev
 ```
 
-この環境でnpmがPATHにない場合は、プロジェクト内の実行ファイルを使います。
-
-```powershell
-.\\.tools\\node-v22.16.0-win-x64\\npm.cmd run dev
-```
+MacBookで初めて環境を作る場合（Node導入、SSH鍵、実機確認まで）は
+[開発環境セットアップ](docs/development-setup.md)を参照してください。
 
 起動後:
 
@@ -90,8 +102,9 @@ npm run dev
 
 ビルドとLint:
 
-```powershell
+```bash
 npm run lint
+npx tsc --noEmit
 npm run build
 ```
 

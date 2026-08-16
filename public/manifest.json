@@ -1,16 +1,48 @@
 {
+  "id": "/",
   "name": "Selenia Aroma",
   "short_name": "Selenia",
-  "description": "セレニアアロマ制作記録PWA",
-  "start_url": "/dashboard",
+  "description": "脳波測定にもとづくアロマ制作記録とカルテ管理",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#FAF7F1",
-  "theme_color": "#B9A6D8",
+  "theme_color": "#8D6FD1",
   "icons": [
     {
-      "src": "/window.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "アロマ記録",
+      "short_name": "記録",
+      "description": "自分のアロマ記録を見る",
+      "url": "/dashboard"
+    },
+    {
+      "name": "脳波アロマ管理カルテ",
+      "short_name": "カルテ",
+      "description": "事業者向けカルテを開く",
+      "url": "/operator"
     }
   ]
 }

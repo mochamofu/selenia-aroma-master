@@ -864,7 +864,7 @@ export default function OperatorKartePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f2fb] text-[#3b3152]">
+    <div className="safe-x min-h-screen bg-[#f6f2fb] text-[#3b3152]">
       <div className="flex min-h-screen">
         <aside className="hidden w-[236px] shrink-0 border-r border-[#e4dff0] bg-[#f8f5fd] px-4 py-5 lg:block">
           <div className="flex items-center gap-3 border-b border-[#e4dff0] pb-5">
@@ -892,7 +892,7 @@ export default function OperatorKartePage() {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 border-b border-[#e4dff0] bg-[#f8f5fd]/95 px-4 py-3 backdrop-blur lg:px-6">
+          <header className="safe-top sticky top-0 z-20 border-b border-[#e4dff0] bg-[#f8f5fd]/95 px-4 py-3 backdrop-blur lg:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="text-xl font-bold text-[#342a49]">脳波アロマ管理カルテ</h1>
@@ -924,7 +924,7 @@ export default function OperatorKartePage() {
           ) : null}
 
           {activeTab === "karte" ? (
-            <section className="grid gap-4 p-4 lg:grid-cols-[260px_minmax(0,1fr)_380px] lg:p-6">
+            <section className="grid gap-4 p-4 md:grid-cols-[240px_minmax(0,1fr)] lg:p-6 xl:grid-cols-[260px_minmax(0,1fr)_380px]">
               <ClientPanel
                 customers={customers}
                 selectedCustomerId={selectedCustomerId}
@@ -1040,7 +1040,7 @@ export default function OperatorKartePage() {
                 </section>
               </div>
 
-              <aside className="min-w-0 space-y-4">
+              <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1">
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
                     <div>

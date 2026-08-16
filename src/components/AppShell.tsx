@@ -17,7 +17,7 @@ export function AppShell({
   const pathname = usePathname();
   return (
     <div className="mx-auto min-h-screen w-full max-w-[430px] overflow-hidden bg-[#FAF7F1] shadow-2xl shadow-stone-300/60">
-      <main className={withNav ? "min-h-screen pb-28" : "min-h-screen"}>{children}</main>
+      <main className={withNav ? "nav-safe-padding min-h-screen" : "min-h-screen"}>{children}</main>
       {withNav ? variant === "admin" ? <AdminBottomNav pathname={pathname} /> : <BottomNav pathname={pathname} /> : null}
     </div>
   );

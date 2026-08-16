@@ -4,7 +4,7 @@ import { Icon } from "./Icon";
 
 export function BottomNav({ pathname }: { pathname: string }) {
   return (
-    <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(398px,calc(100%-24px))] rounded-[28px] border border-white/80 bg-white/88 px-2 py-2 shadow-xl shadow-stone-400/20 backdrop-blur" aria-label="メインナビゲーション">
+    <nav className="nav-offset-bottom fixed inset-x-0 z-40 mx-auto w-[min(398px,calc(100%-24px))] rounded-[28px] border border-white/80 bg-white/88 px-2 py-2 shadow-xl shadow-stone-400/20 backdrop-blur" aria-label="メインナビゲーション">
       <div className="grid grid-cols-5 gap-1">
         {customerTabs.map((item) => {
           const active = pathname === item.href || (item.href.startsWith("/aromas") && pathname.startsWith("/aromas"));
