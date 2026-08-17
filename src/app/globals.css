@@ -3,6 +3,29 @@
 :root {
   --background: #faf7f1;
   --foreground: #322b25;
+
+  /*
+   * 管理者・施術者向けアプリのブランドカラー（薄紫）。
+   * 以前のモックは緑基調だったが、セレニアのブランドに合わせて紫系に統一する。
+   * 画面側は直値ではなくこのトークンを使う。
+   */
+  --admin-primary: #8d6fd1;
+  --admin-primary-strong: #6f55ab;
+  --admin-primary-soft: #efe8fb;
+  --admin-primary-softer: #f7f3fd;
+  --admin-accent: #d98aa8;
+  --admin-surface: #ffffff;
+  --admin-canvas: #f6f3fc;
+  --admin-sidebar: #f3eefb;
+  --admin-border: #e4dcf3;
+  --admin-text: #3b3152;
+  --admin-text-muted: #7b7089;
+  --admin-warning: #8a6a35;
+  --admin-warning-soft: #fdf3e3;
+  --admin-danger: #a8506e;
+  --admin-danger-soft: #fdeaef;
+  --admin-success: #5e7d56;
+  --admin-success-soft: #eef4e9;
 }
 
 @theme inline {

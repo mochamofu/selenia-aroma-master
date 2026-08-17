@@ -1,14 +1,17 @@
 "use client";
 
 import { ChangeEvent, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
+  AlertTriangle,
   BrainCircuit,
   CalendarDays,
   Check,
   ChevronRight,
   ClipboardList,
   FileImage,
+  FileText,
   FlaskConical,
   ImagePlus,
   Leaf,
@@ -23,7 +26,9 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
+import { calculateAge as calculateClientAge, operatorClients } from "@/data/operatorClients";
 import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
 import { usePrivateBaseRecipes } from "@/hooks/usePrivateBaseRecipes";
@@ -34,7 +39,15 @@ import { essentialOils } from "@/data/essentialOils";
 import type { AromaRecord, BaseBlend, EssentialOil } from "@/types/aroma";
 import type { Profile } from "@/types/profile";
 
-type AppTab = "karte" | "base" | "oils";
+type KarteTab = "summary" | "measurements" | "blends" | "report" | "memo";
+
+const KARTE_TABS: Array<{ value: KarteTab; label: string }> = [
+  { value: "summary", label: "サマリー" },
+  { value: "measurements", label: "脳波測定記録" },
+  { value: "blends", label: "香り制作記録" },
+  { value: "report", label: "レポート" },
+  { value: "memo", label: "メモ" },
+];
 type VolumeUnit = "ul" | "ml";
 type HistorySelection = { kind: "record" | "draft"; id: string };
 type CreationPanel = "customer" | "base" | "oil" | null;
@@ -175,16 +188,18 @@ const emptyEssentialOilForm: EssentialOilForm = {
   safetyNote: "",
 };
 
-const operatorCustomers: Profile[] = [
-  customer("profile-sakura", "user-sakura", "田中 さくら", "2026-01-12T00:00:00.000Z", ["リラックス系", "ウッディ系"], ["夜", "就寝前"]),
-  customer("profile-ren", "user-ren", "佐藤 蓮", "2026-01-28T00:00:00.000Z", ["集中系", "ミント系"], ["朝", "仕事前"]),
-  customer("profile-mika", "user-mika", "鈴木 美香", "2026-02-08T00:00:00.000Z", ["フローラル系", "バランス系"], ["夕方", "入浴後"]),
-  customer("profile-haruto", "user-haruto", "高橋 陽斗", "2026-02-19T00:00:00.000Z", ["シトラス系", "リフレッシュ系"], ["昼", "外出前"]),
-  customer("profile-natsumi", "user-natsumi", "中村 夏美", "2026-03-02T00:00:00.000Z", ["ハーバル系", "睡眠系"], ["夜", "休日"]),
-  customer("profile-naoto", "user-naoto", "小林 直人", "2026-03-14T00:00:00.000Z", ["森林系", "集中系"], ["朝", "作業前"]),
-  customer("profile-eriko", "user-eriko", "伊藤 恵理子", "2026-03-27T00:00:00.000Z", ["樹脂系", "落ち着き系"], ["夕方", "瞑想前"]),
-  customer("profile-daichi", "user-daichi", "森田 大地", "2026-04-05T00:00:00.000Z", ["スパイス系", "元気系"], ["午前", "運動前"]),
-];
+// カルテの顧客リストは operatorClients から作る。
+// 顧客一覧ページと別々に持つと人数がずれるため、出典を1つに揃えている。
+const operatorCustomers: Profile[] = operatorClients.map((client) =>
+  customer(
+    client.id,
+    client.userId,
+    client.name,
+    `${client.firstVisitAt}T00:00:00.000Z`,
+    client.preferenceTags,
+    [],
+  ),
+);
 
 const hearingProfiles: Record<string, { kana: string; birthday: string }> = {
   "user-sakura": { kana: "たなか さくら", birthday: "1988-05-21" },
@@ -541,7 +556,7 @@ export default function OperatorKartePage() {
   const customers = useMemo(() => [...operatorCustomers, ...customCustomers], [customCustomers]);
   const allBaseBlends = useMemo(() => [...demoBaseBlends, ...customBaseBlends], [customBaseBlends]);
   const allEssentialOils = useMemo(() => [...essentialOils, ...customEssentialOils], [customEssentialOils]);
-  const [activeTab, setActiveTab] = useState<AppTab>("karte");
+  const [karteTab, setKarteTab] = useState<KarteTab>("measurements");
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.user_id ?? "");
   const [brainwaveImages, setBrainwaveImages] = useState<BrainwaveImage[]>(initialImages);
   const [selectedImageId, setSelectedImageId] = useState(operatorAromas[0]?.brainwave_image_id ?? initialImages[0]?.id ?? "");
@@ -574,6 +589,9 @@ export default function OperatorKartePage() {
   const [toast, setToast] = useState("");
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? customers[0];
+  // 業務用の顧客情報（顧客番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
+  const selectedClient = operatorClients.find((client) => client.userId === selectedCustomerId) ?? null;
+  const selectedClientAge = selectedClient ? calculateClientAge(selectedClient.birthday) : null;
   const customerImages = brainwaveImages.filter((image) => image.customerId === selectedCustomerId);
   const activeImage = customerImages.find((image) => image.id === selectedImageId) ?? customerImages[0];
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
@@ -777,7 +795,6 @@ export default function OperatorKartePage() {
     setSelectedHistory(null);
     setCustomerForm(emptyCustomerForm);
     setCreationPanel(null);
-    setActiveTab("karte");
     setToast(`${name}のカルテを追加しました。`);
   }
 
@@ -813,7 +830,6 @@ export default function OperatorKartePage() {
     setSelectedBaseId(id);
     setBaseBlendForm(emptyBaseBlendForm);
     setCreationPanel(null);
-    setActiveTab("base");
     setToast(`${name}をベースブレンド図鑑に追加しました。`);
   }
 
@@ -853,7 +869,6 @@ export default function OperatorKartePage() {
     setOilQuery("");
     setOilMood("all");
     setCreationPanel(null);
-    setActiveTab("oils");
     setToast(`${name}を精油図鑑に追加しました。`);
   }
 
@@ -864,57 +879,74 @@ export default function OperatorKartePage() {
   }
 
   return (
-    <div className="safe-x min-h-screen bg-[#f6f2fb] text-[#3b3152]">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-[236px] shrink-0 border-r border-[#e4dff0] bg-[#f8f5fd] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 border-b border-[#e4dff0] pb-5">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#8d6fd1] text-white">
-              <BrainCircuit className="h-5 w-5" />
+    <AdminShell
+      title="顧客カルテ"
+      subtitle="測定・制作・レポートを1人分まとめて扱います"
+      actions={
+        <button
+          onClick={saveDraft}
+          className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[var(--admin-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--admin-primary-strong)]"
+        >
+          <Save className="h-4 w-4" />
+          カルテを保存
+        </button>
+      }
+    >
+      <div>
+        <div>
+          {/* 選択中の利用者の身元情報。どのタブにいても常に見えるようにする。 */}
+          <section className="border-b border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 lg:px-6">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="text-xl font-bold text-[var(--admin-text)]">
+                {selectedClient?.name ?? selectedCustomer?.name ?? "顧客未選択"}
+              </h2>
+              {selectedClient ? (
+                <>
+                  <span className="rounded-lg bg-[var(--admin-primary-soft)] px-2.5 py-1 text-xs font-bold text-[var(--admin-primary-strong)]">
+                    ID: {selectedClient.clientNumber}
+                  </span>
+                  <span className="text-sm text-[var(--admin-text-muted)]">
+                    {selectedClient.gender}
+                    {selectedClientAge !== null ? ` ${selectedClientAge}歳` : ""}
+                    （{selectedClient.birthday.replace(/-/g, "/")}）
+                  </span>
+                  <span className="text-sm text-[var(--admin-text-muted)]">職業: {selectedClient.occupation}</span>
+                  <span className="ml-auto text-sm text-[var(--admin-text-muted)]">
+                    最終来店: {selectedClient.lastVisitAt}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm text-[var(--admin-text-muted)]">
+                  ID: {selectedCustomer?.user_id ?? "-"}
+                </span>
+              )}
             </div>
-            <div>
-              <p className="text-sm font-bold tracking-[0.08em] text-[#3b3152]">SELENIA</p>
-              <p className="text-xs text-[#817490]">Aroma Karte</p>
-            </div>
-          </div>
-          <nav className="mt-5 space-y-1">
-            <SideNavButton active={activeTab === "karte"} icon={<ClipboardList className="h-4 w-4" />} label="顧客カルテ" onClick={() => setActiveTab("karte")} />
-            <SideNavButton active={activeTab === "base"} icon={<FlaskConical className="h-4 w-4" />} label="ベースブレンド" onClick={() => setActiveTab("base")} />
-            <SideNavButton active={activeTab === "oils"} icon={<Leaf className="h-4 w-4" />} label="精油図鑑" onClick={() => setActiveTab("oils")} />
-          </nav>
-          <div className="mt-6 rounded-lg border border-[#e4dff0] bg-white p-3">
-            <p className="text-xs font-bold text-[#665a78]">今日の運用</p>
-            <div className="mt-3 space-y-2 text-xs text-[#7b7088]">
-              <p className="flex items-center justify-between"><span>測定予定</span><span className="font-bold text-[#8d6fd1]">4件</span></p>
-              <p className="flex items-center justify-between"><span>保存待ち</span><span className="font-bold text-[#c7893a]">{savedDrafts.length + 2}件</span></p>
-              <p className="flex items-center justify-between"><span>図鑑データ</span><span className="font-bold text-[#8d6fd1]">{allBaseBlends.length + allEssentialOils.length}件</span></p>
-            </div>
-          </div>
-        </aside>
 
-        <main className="min-w-0 flex-1">
-          <header className="safe-top sticky top-0 z-20 border-b border-[#e4dff0] bg-[#f8f5fd]/95 px-4 py-3 backdrop-blur lg:px-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-xl font-bold text-[#342a49]">脳波アロマ管理カルテ</h1>
-                <p className="mt-1 text-xs text-[#827690]">1分測定画像、顧客ID、制作日、独自ブレンドを同じ履歴に紐づけます。</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="hidden h-9 items-center gap-2 rounded-lg border border-[#ded7ec] bg-white px-3 text-xs font-bold text-[#584d6b] sm:flex">
-                  <CalendarDays className="h-4 w-4" />
-                  2026/07/07
+            {selectedClient && selectedClient.safetyNotes.length > 0 ? (
+              <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-[var(--admin-warning-soft)] px-3 py-2 text-xs font-bold text-[var(--admin-warning)]">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {selectedClient.safetyNotes.join(" / ")}
+              </p>
+            ) : null}
+
+            <div className="mt-3 flex gap-1 overflow-x-auto border-b border-[var(--admin-border)]">
+              {KARTE_TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setKarteTab(tab.value)}
+                  aria-current={karteTab === tab.value ? "page" : undefined}
+                  className={`shrink-0 border-b-2 px-4 py-2.5 text-sm transition ${
+                    karteTab === tab.value
+                      ? "border-[var(--admin-primary)] font-bold text-[var(--admin-primary-strong)]"
+                      : "border-transparent font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+                  }`}
+                >
+                  {tab.label}
                 </button>
-                <button onClick={saveDraft} className="flex h-9 items-center gap-2 rounded-lg bg-[#8d6fd1] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#755bb4]">
-                  <Save className="h-4 w-4" />
-                  保存
-                </button>
-              </div>
+              ))}
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-[#e4dff0] bg-white p-1 lg:hidden">
-              <TopTab active={activeTab === "karte"} label="カルテ" onClick={() => setActiveTab("karte")} />
-              <TopTab active={activeTab === "base"} label="ベース" onClick={() => setActiveTab("base")} />
-              <TopTab active={activeTab === "oils"} label="精油" onClick={() => setActiveTab("oils")} />
-            </div>
-          </header>
+          </section>
 
           {toast ? (
             <div className="mx-4 mt-4 flex items-center justify-between rounded-lg border border-[#ccbdec] bg-[#f3effb] px-4 py-3 text-sm font-bold text-[#8d6fd1] lg:mx-6">
@@ -923,7 +955,7 @@ export default function OperatorKartePage() {
             </div>
           ) : null}
 
-          {activeTab === "karte" ? (
+          {(
             <section className="grid gap-4 p-4 md:grid-cols-[240px_minmax(0,1fr)] lg:p-6 xl:grid-cols-[260px_minmax(0,1fr)_380px]">
               <ClientPanel
                 customers={customers}
@@ -934,21 +966,8 @@ export default function OperatorKartePage() {
               />
 
               <div className="min-w-0 space-y-4">
-                <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-[#7f738d]">選択中のカルテ</p>
-                      <h2 className="mt-1 text-2xl font-bold text-[#342a49]">{selectedCustomer?.name ?? "顧客未選択"}</h2>
-                      <p className="mt-1 text-sm text-[#786d87]">ID: {selectedCustomer?.user_id ?? "-"} / 登録日 {selectedCustomer?.created_at.slice(0, 10) ?? "-"}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <MiniMetric label="履歴" value={customerRecords.length + customerDrafts.length} />
-                      <MiniMetric label="画像" value={customerImages.length} />
-                      <MiniMetric label="最新" value={latestRecord?.made_at.slice(5) ?? "-"} />
-                    </div>
-                  </div>
-                </section>
-
+                {karteTab === "measurements" ? (
+                  <>
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1006,7 +1025,10 @@ export default function OperatorKartePage() {
                   onScreenshotsChange={setBrainwaveScreenshots}
                   onToast={setToast}
                 />
+                  </>
+                ) : null}
 
+                {karteTab === "summary" || karteTab === "blends" ? (
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><ListTree className="h-5 w-5 text-[#8d6fd1]" />過去の診断・制作履歴</h2>
                   <div className="mt-4 space-y-2">
@@ -1038,6 +1060,47 @@ export default function OperatorKartePage() {
                     <HearingSheetPanel sheet={activeHearingSheet} />
                   </div>
                 </section>
+                ) : null}
+
+                {karteTab === "report" ? (
+                  <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
+                    <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]">
+                      <FileText className="h-5 w-5 text-[#8d6fd1]" />レポート
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-[#665a78]">
+                      利用者へ渡すレポートの書き出しはまだ作っていません。載せてよい項目
+                      （測定はリラックス・集中のみ、内部比率と5帯域は載せない）を確定してから実装します。
+                    </p>
+                    <Link
+                      href="/operator/reports"
+                      className="mt-4 inline-flex h-9 items-center rounded-lg border border-[#ded7ec] px-3 text-xs font-bold text-[#584d6b]"
+                    >
+                      実装予定の内容を見る
+                    </Link>
+                  </section>
+                ) : null}
+
+                {karteTab === "memo" ? (
+                  <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
+                    <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]">
+                      <ClipboardList className="h-5 w-5 text-[#8d6fd1]" />施術メモ
+                    </h2>
+                    <p className="mt-1 text-xs text-[#827690]">
+                      制作時の判断や利用者の反応など、内部向けの記録です。利用者には表示しません。
+                    </p>
+                    <textarea
+                      value={makerNote}
+                      onChange={(event) => setMakerNote(event.target.value)}
+                      className="mt-3 min-h-40 w-full rounded-lg border border-[#ddd6ea] bg-white px-3 py-2 text-sm outline-none focus:border-[#8d6fd1]"
+                      placeholder="例: 前回より甘さを控えめに。ベルガモットで締めた。"
+                    />
+                    {selectedClient ? (
+                      <p className="mt-3 rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
+                        <span className="font-bold">カウンセリング記録:</span> {selectedClient.note}
+                      </p>
+                    ) : null}
+                  </section>
+                ) : null}
               </div>
 
               <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1">
@@ -1204,139 +1267,8 @@ export default function OperatorKartePage() {
                 </section>
               </aside>
             </section>
-          ) : null}
-
-          {activeTab === "base" ? (
-            <section className="p-4 lg:p-6">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-bold text-[#342a49]">ベースブレンド図鑑</h2>
-                  <p className="mt-1 text-sm text-[#7b7088]">{allBaseBlends.length}種類のベースブレンドを、目的カテゴリごとに確認できます。</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCreationPanel("base")}
-                    className="flex h-10 items-center gap-2 rounded-lg bg-[#8d6fd1] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#755bb4]"
-                  >
-                    <Plus className="h-4 w-4" />
-                    ベース追加
-                  </button>
-                  {canSeeInternalRatios ? (
-                    <button
-                      type="button"
-                      onClick={toggleInternalRatios}
-                      className={`flex h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${showInternalRatios ? "border-[#d8c7ef] bg-[#f6f2fd] text-[#6b57a0]" : "border-[#ded7ec] bg-white text-[#7b7088] hover:border-[#b7a5dd]"}`}
-                    >
-                      {showInternalRatios ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                      {showInternalRatios ? "内部比率を隠す" : "内部比率を表示"}
-                    </button>
-                  ) : (
-                    <span className="flex h-10 items-center gap-2 rounded-lg border border-[#ded7ec] bg-white px-3 text-xs font-bold text-[#a79dba]">
-                      <Lock className="h-3.5 w-3.5" />
-                      内部比率は管理者のみ
-                    </span>
-                  )}
-                </div>
-              </div>
-              {canSeeInternalRatios && showInternalRatios && privateRecipesError ? (
-                <p className="mb-4 rounded-lg bg-[#fdeaef] p-3 text-xs font-bold text-[#a8506e]">
-                  {privateRecipesError}
-                </p>
-              ) : null}
-              {canSeeInternalRatios && showInternalRatios && privateRecipesLoading ? (
-                <p className="mb-4 rounded-lg bg-[#f8f5fd] p-3 text-xs text-[#665a78]">内部比率を取得しています…</p>
-              ) : null}
-              <p className="mb-4 rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
-                現在の表示範囲: {DISCLOSURE_DESCRIPTIONS[disclosureLevel]}
-              </p>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {allBaseBlends.map((blend) => {
-                  const privateNote = allBaseNotes[blend.id];
-                  const guide = getBaseBlendGuide(blend.id);
-                  return (
-                    <article key={blend.id} className="rounded-lg border border-[#e4dff0] bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-[#7b708d]">{blend.code}</p>
-                          <h3 className="mt-1 text-lg font-bold text-[#3b3152]">{blend.name}</h3>
-                        </div>
-                        <span className="h-8 w-8 rounded-lg border border-white shadow-inner" style={{ background: blend.color }} />
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-[#665a78]">{formatOperatorBaseDescription(blend.description)}</p>
-                      <InfoLine label="目的カテゴリ" value={blend.benefits.join(" / ")} />
-                      <InfoLine label="構成精油" value={blend.public_ingredients.join(" / ")} />
-                      {guide && canDisclose(disclosureLevel, "instructor") ? (
-                        <div className="mt-3 space-y-2 rounded-lg bg-[#faf7ff] p-3 text-xs leading-5 text-[#6f637f]">
-                          <p><span className="font-bold text-[#3b3152]">使い分け:</span> {guide.instructor.selectionGuide}</p>
-                          <p>
-                            <span className="font-bold text-[#3b3152]">相性:</span>{" "}
-                            {guide.instructor.pairingOils.map((oil) => oil.name).join(" / ")}
-                          </p>
-                          <p className="text-[#8a4a60]">
-                            <span className="font-bold">事前確認:</span> {guide.instructor.contraindications[0]}
-                          </p>
-                        </div>
-                      ) : null}
-                      {baseSecretsUnlocked ? (
-                        <div className="mt-3 rounded-lg bg-[#fdeaef] p-3 text-xs leading-5 text-[#6f637f]">
-                          <p><span className="font-bold text-[#3b3152]">内部比率:</span> {privateNote?.ratio ?? "未設定"}</p>
-                          <p className="mt-1">{privateNote?.note}</p>
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
-          {activeTab === "oils" ? (
-            <section className="p-4 lg:p-6">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-bold text-[#342a49]">追加オイル・精油図鑑</h2>
-                  <p className="mt-1 text-sm text-[#7b7088]">{allEssentialOils.length}種類の精油を、香りの印象・相性・注意メモで確認できます。</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCreationPanel("oil")}
-                    className="flex h-10 items-center gap-2 rounded-lg bg-[#8d6fd1] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#755bb4]"
-                  >
-                    <Plus className="h-4 w-4" />
-                    精油追加
-                  </button>
-                  <div className="flex h-10 items-center gap-2 rounded-lg border border-[#ded7ec] bg-white px-3">
-                    <Search className="h-4 w-4 text-[#7b7088]" />
-                    <input value={oilQuery} onChange={(event) => setOilQuery(event.target.value)} placeholder="精油名・学名で検索" className="w-44 bg-transparent text-sm outline-none" />
-                  </div>
-                  <select value={oilMood} onChange={(event) => setOilMood(event.target.value)} className="h-10 rounded-lg border border-[#ded7ec] bg-white px-3 text-sm outline-none">
-                    {moodFilters.map((filter) => <option key={filter.slug} value={filter.slug}>{filter.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {filteredOils.map((oil) => (
-                  <article key={oil.slug} className="rounded-lg border border-[#e4dff0] bg-white p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-bold text-[#3b3152]">{oil.name}</h3>
-                        <p className="mt-1 text-xs italic text-[#7b708d]">{oil.botanical_name}</p>
-                      </div>
-                      <span className="rounded-lg px-2 py-1 text-xs font-bold text-white" style={{ background: oil.color }}>{oil.scent_note}</span>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-[#665a78]">{oil.overview}</p>
-                    <InfoLine label="香り" value={oil.scent_profile} />
-                    <InfoLine label="よく使う場面" value={oil.common_uses.join(" / ")} />
-                    <InfoLine label="相性" value={oil.blends_well_with.join(" / ")} />
-                    <p className="mt-3 rounded-lg bg-[#fff8ef] p-3 text-xs leading-5 text-[#795f32]">{oil.safety_note}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </main>
+          )}
+        </div>
       </div>
 
       {creationPanel === "customer" ? (
@@ -1463,7 +1395,7 @@ export default function OperatorKartePage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </AdminShell>
   );
 }
 
