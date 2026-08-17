@@ -1,48 +1,43 @@
 # Vercel デプロイ運用
 
-最終更新: 2026年8月16日
+最終更新: 2026年8月17日
 
-## いま起きていること
+## 現在の状態（2026-08-17 時点）
 
-公開URL `https://aroma-records-pwa.vercel.app` は動いていますが、
-**このGitHubリポジトリとは連携されていない状態です。** 根拠は次の3点です。
-
-- PR を作っても Vercel のプレビューURLコメントが付かない（連携済みなら自動で付く）
-- `main` ブランチには `LICENSE` しか入っておらず、そのままではビルドできない
-- 公開URLの名前（`aroma-records-pwa`）とリポジトリ名（`selenia-aroma-master`）が一致しない
-
-つまり今の公開版は、ローカルから `vercel` CLI で直接デプロイされたものと考えられます。
-このため、**リポジトリに何を push しても公開URLは変わりません。**
-
-## 目指す状態
+**連携済みです。** Vercel プロジェクト `aroma-records-pwa` が
+`mochamofu/selenia-aroma-master` に接続されています。
 
 | | 用途 | URL |
 |---|---|---|
-| Production | 本番。`main` から自動デプロイ | `https://<project>.vercel.app` |
+| Production | 本番。`main` への push で自動デプロイ | `https://aroma-records-pwa.vercel.app` |
 | Preview | PRごとに自動で作られる確認用 | PR に自動コメントされる |
 | Development | 各自のPC | `http://localhost:3000` |
 
-こうすると、**PRを出した時点でHTTPSのプレビューURLが手に入る**ので、
+これにより、**PRを出した時点でHTTPSのプレビューURLが手に入る**ので、
 iPhone / iPad の実機で PWA の挙動まで確認してからマージできます。
+PWA はHTTPSでないと本来の挙動にならないため、LAN経由の `http://` より確実です。
+
+### 連携までに何をしたか（記録）
+
+以前は次の状態でした。
+
+- `main` ブランチには `LICENSE` しか入っておらず、そのままではビルドできなかった
+- 公開URLはローカルから `vercel` CLI で直接デプロイされたもので、リポジトリと繋がっていなかった
+- そのため、リポジトリに何を push しても公開URLは変わらなかった
+
+順番として、**先に `main` へアプリ本体を入れてから**連携しています。
+`main` が空のまま繋ぐと、Production のビルドが失敗して公開サイトが落ちるためです。
 
 ## 手順
 
-### 手順1: `main` にアプリ本体を入れる（連携より先に必要）
+以下は連携時の手順の記録です。再構築が必要になった場合に参照してください。
 
-現在アプリ本体は `agent/repository-documentation` ブランチにあります。
-`main` は空なので、先に中身を移します。
+### 手順1: `main` にアプリ本体を入れる（連携より先に必要）— 完了済み
 
-GitHub 上で `agent/repository-documentation` → `main` の PR を作ってマージするのが安全です。
-ローカルからやる場合は次のとおりです。
+`agent/repository-documentation` の内容を `main` へ取り込みました（PR #2）。
+`main` が空のまま Vercel を繋ぐと Production のビルドが失敗するため、必ずこちらを先に行います。
 
-```bash
-git checkout main
-git merge origin/agent/repository-documentation
-npm run lint && npx tsc --noEmit && npm run build   # 通ることを確認
-git push origin main
-```
-
-### 手順2: Vercel プロジェクトを GitHub に繋ぐ
+### 手順2: Vercel プロジェクトを GitHub に繋ぐ — 完了済み
 
 既存の `aroma-records-pwa` プロジェクトを繋ぎ直す場合:
 
@@ -62,7 +57,7 @@ git push origin main
 ドメインを新プロジェクトへ移してください。** 両方生きていると
 「どっちが最新か分からない」状態が続きます。
 
-### 手順3: 環境変数を入れる
+### 手順3: 環境変数を入れる（要確認）
 
 **Settings** → **Environment Variables** で以下を登録します。
 Production / Preview / Development のどれに適用するかを選べます。

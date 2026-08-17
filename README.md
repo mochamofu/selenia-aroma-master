@@ -38,7 +38,7 @@
 | 脳波データ取り込み仕様 | `docs/brainwave-data-intake.md` |
 | 非エンジニア向けデモガイド | `docs/demo-start-guide.md` |
 | 開発環境セットアップ（Mac/Win） | `docs/development-setup.md` |
-| Vercelデプロイ運用 | `docs/vercel-deployment.md` |
+| Vercelデプロイ運用（連携済み） | `docs/vercel-deployment.md` |
 
 公開URLは現行デモの記録です。環境やVercelのデプロイ状態によって表示内容・認証状態が変わるため、共有前に`/operator`と`/dashboard`を確認してください。
 
