@@ -13,6 +13,7 @@ import {
   FileText,
   FlaskConical,
   Layers,
+  LayoutDashboard,
   Menu,
   PanelLeftClose,
   Settings,
@@ -30,6 +31,7 @@ const NAV_ICONS: Record<string, typeof Activity> = {
   FileText,
   FlaskConical,
   Layers,
+  LayoutDashboard,
   Settings,
   Users,
 };

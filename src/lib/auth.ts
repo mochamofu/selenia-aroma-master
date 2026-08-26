@@ -1,9 +1,13 @@
 "use client";
 
 import { isDemoModeEnabled, supabase } from "./supabaseClient";
-import { isCustomerOnlyApp } from "./appTarget";
-import { demoCustomers } from "@/data/mockData";
-import type { Profile, UserRole } from "@/types/profile";
+import type { UserRole } from "@/types/profile";
+
+/**
+ * 管理者・施術者向けアプリの認証。
+ * 利用者（購入者）向けアプリは別リポジトリのため、顧客専用のゲスト
+ * セッション生成やロール振り分けはここには置かない。
+ */
 
 const STORAGE_KEY = "aroma-demo-session";
 
@@ -16,20 +20,14 @@ export type AuthSession = {
 export function getStoredSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as AuthSession) : null;
-}
-
-export function getDemoProfile(session: AuthSession | null): Profile | null {
-  if (!session) return null;
-  return demoCustomers.find((profile) => profile.user_id === session.userId) ?? null;
-}
-
-export function createGuestCustomerSession() {
-  const session: AuthSession = { userId: "user-yuka", email: "guest@selenia-aroma.local", role: "customer" };
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthSession;
+  } catch {
+    // 壊れた値が残っている場合は捨てる（ログイン不能になるのを防ぐ）
+    window.localStorage.removeItem(STORAGE_KEY);
+    return null;
   }
-  return session;
 }
 
 export async function signInWithEmail(email: string, password: string) {
@@ -43,8 +41,9 @@ export async function signInWithEmail(email: string, password: string) {
     throw new Error("Supabaseの環境変数が未設定です。管理者に確認してください。");
   }
 
-  const role: UserRole = isCustomerOnlyApp ? "customer" : email.includes("admin") ? "admin" : "customer";
-  const userId = role === "admin" ? "user-admin" : "user-yuka";
+  // デモモードでは、メールに admin を含むかどうかでロールを決める。
+  const role: UserRole = email.includes("admin") ? "admin" : "instructor";
+  const userId = role === "admin" ? "user-admin" : "user-instructor";
   const session: AuthSession = { userId, email, role };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   return { user: { id: userId, email }, role };

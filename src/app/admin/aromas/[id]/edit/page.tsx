@@ -1,9 +1,10 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-import { AromaForm } from "@/components/AromaForm";
-
-export default function EditAromaPage() {
-  const params = useParams<{ id: string }>();
-  return <AromaForm mode="edit" aromaId={params.id} />;
+export default async function AdminEditAromaRedirectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/operator/blend-records/${id}/edit`);
 }

@@ -1,8 +1,9 @@
 /**
  * 管理者・施術者向けアプリのサイドナビ定義。
  *
- * このアプリは「利用者向けアプリ」とは別物。利用者向けはスマートフォン幅
- * (AppShell / max-w-430px) だが、こちらはPC・iPadでの業務用画面として作る。
+ * このリポジトリは管理者・施術者向けアプリ専用。利用者（購入者）向けアプリは
+ * 別リポジトリ（selenia-aroma-user）にあり、ここには含めない。
+ * 画面はPC・タブレットでの業務利用を前提に作る。
  */
 
 export type AdminNavItem = {
@@ -16,6 +17,13 @@ export type AdminNavItem = {
 };
 
 export const adminNavItems: AdminNavItem[] = [
+  {
+    href: "/operator/dashboard",
+    label: "ダッシュボード",
+    icon: "LayoutDashboard",
+    description: "サロン全体の状況をまとめて確認する",
+    status: "ready",
+  },
   {
     href: "/operator",
     label: "顧客カルテ",
@@ -42,7 +50,7 @@ export const adminNavItems: AdminNavItem[] = [
     label: "香り制作記録",
     icon: "FlaskConical",
     description: "作成したブレンドの履歴とロット番号",
-    status: "preparing",
+    status: "ready",
   },
   {
     href: "/operator/base-blends",

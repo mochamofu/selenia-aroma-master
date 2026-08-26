@@ -1,22 +1,22 @@
-# Selenia Aroma
+# Selenia Aroma Karte（管理者・施術者向け）
 
-脳波アロマ測定サービスの事業者向け管理画面と、購入者向けアロマ記録画面をまとめた Next.js Web アプリです。利用者ごとのカルテ、1分測定の脳波画像、香りの制作履歴、μL / mL ベースの配合計算、ヒアリング回答、精油・ベースブレンド情報を一つの画面体系で扱います。
+脳波アロマ測定サービスの**管理者・施術者向け管理アプリ**です。利用者ごとのカルテ、
+1分測定の脳波データ（CSV / 測定画面のスクリーンショット）、香りの制作履歴、
+μL / mL ベースの配合計算、ヒアリング回答、精油・ベースブレンド情報を扱います。
+
+**利用者（購入者）向けアプリはこのリポジトリには含まれません。**
+別リポジトリ `mochamofu/selenia-aroma-user` が担当します。
 
 ## まず画面を開く
 
-下のリンクを押すだけで、すぐにデモ画面を確認できます。
+**[管理アプリを開く](https://aroma-records-pwa.vercel.app/operator/dashboard)**
 
-### 事業者向けカルテを試す
+PC・タブレットでの利用を前提にしています。サイドバーから
+顧客カルテ / 顧客一覧 / 香り制作記録 / ベースブレンド一覧 / エッセンシャルオイル一覧
+へ移動できます。
 
-**[アプリを起動する（脳波アロマ管理カルテ）](https://aroma-records-pwa.vercel.app/operator)**
-
-この画面で、顧客を選ぶ、過去の制作履歴を選ぶ、脳波画像を見る、配合量を5mL / 10mLで切り替える、ヒアリング回答を見る、という一連の操作を確認できます。
-
-### 購入者向け画面を試す
-
-**[購入者向け画面を開く](https://aroma-records-pwa.vercel.app/dashboard)**
-
-スマートフォン実機では、上のURLをそのままスマートフォンのブラウザで開いてください。PCでスマートフォン表示を試す場合は、ブラウザのデバイス表示を390×844程度にすると、実機に近い状態で確認できます。
+デモモードでは、メールアドレスに `admin` を含めると管理者、
+それ以外は認定インストラクターとしてログインします。
 
 詳しい操作手順は[非エンジニア向けデモ起動ガイド](docs/demo-start-guide.md)にまとめています。
 
@@ -24,10 +24,10 @@
 
 | 用途 | URL / ファイル |
 | --- | --- |
-| 公開URL（現行記録） | [https://aroma-records-pwa.vercel.app/operator](https://aroma-records-pwa.vercel.app/operator) |
-| ローカル起動 | `http://localhost:3000/operator` |
+| 公開URL | [https://aroma-records-pwa.vercel.app/operator/dashboard](https://aroma-records-pwa.vercel.app/operator/dashboard) |
+| ローカル起動 | `http://localhost:3000/operator/dashboard` |
 | 事業者向けカルテ画面 | `src/app/operator/page.tsx` |
-| 購入者向けトップ | `src/app/dashboard/page.tsx` |
+| 管理者ダッシュボード | `src/app/operator/dashboard/page.tsx` |
 | 仕様書（Markdown） | `docs/aroma-operator-current-capability-spec.md` |
 | 仕様書（Word） | `docs/aroma-operator-current-capability-spec.docx` |
 | 仕様書（PDF） | `docs/aroma-operator-current-capability-spec.pdf` |
