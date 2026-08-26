@@ -55,11 +55,13 @@ function Cell({
   kind,
   active,
   onSelect,
+  onExpand,
 }: {
   image: BrainwaveScreenshot | null;
   kind: "relax" | "focus";
   active: boolean;
   onSelect: (id: string) => void;
+  onExpand: (id: string) => void;
 }) {
   const tone = kind === "relax" ? "#5ab4e8" : "#e08a3c";
   const label = kind === "relax" ? "リラックス度" : "集中度";
@@ -77,6 +79,8 @@ function Cell({
     <button
       type="button"
       onClick={() => onSelect(image.id)}
+      onDoubleClick={() => onExpand(image.id)}
+      title="ダブルクリックで拡大"
       className={`overflow-hidden rounded-lg border text-left transition ${
         active ? "border-[#8d6fd1] shadow-md shadow-[#8d6fd1]/12" : "border-[#e4dff0] hover:border-[#b7a5dd]"
       }`}
@@ -94,6 +98,7 @@ export function BrainwaveTrialGrid({
   rows,
   activeImageId,
   onSelect,
+  onExpand,
   onRelabel,
   onSwap,
   emptyMessage,
@@ -101,6 +106,7 @@ export function BrainwaveTrialGrid({
   rows: TrialRow[];
   activeImageId: string;
   onSelect: (id: string) => void;
+  onExpand: (id: string) => void;
   onRelabel?: (trialNo: number, label: string) => void;
   onSwap?: (trialNo: number) => void;
   emptyMessage: string;
@@ -152,12 +158,14 @@ export function BrainwaveTrialGrid({
               kind="relax"
               active={row.relax?.id === activeImageId}
               onSelect={onSelect}
+              onExpand={onExpand}
             />
             <Cell
               image={row.focus}
               kind="focus"
               active={row.focus?.id === activeImageId}
               onSelect={onSelect}
+              onExpand={onExpand}
             />
           </div>
         </section>

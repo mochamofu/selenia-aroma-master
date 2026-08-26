@@ -29,6 +29,12 @@ import {
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
 import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
+import {
+  clearSessionDraft,
+  loadSessionDraft,
+  saveSessionDraft,
+  SessionDraftTooLargeError,
+} from "@/lib/sessionDraftStore";
 import { calculateAge as calculateClientAge, operatorClients } from "@/data/operatorClients";
 import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
@@ -728,6 +734,10 @@ export default function OperatorKartePage() {
   const [brainwaveSessions, setBrainwaveSessions] = useState<BrainwaveSession[]>([]);
   const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>(initialScreenshots);
   const [toast, setToast] = useState("");
+  // 本日のセッションの一時保存。再読み込みで測定が消えないようにする。
+  const [sessionSavedAt, setSessionSavedAt] = useState("");
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const restoredForCustomer = useRef("");
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? null;
   // 業務用の利用者情報（利用者番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
@@ -748,6 +758,28 @@ export default function OperatorKartePage() {
   const decidedImages = customerImages.filter((image) => image.scope === "decided");
   const trialRows = groupIntoTrials(trialImages);
   const decidedRows = groupIntoTrials(decidedImages);
+
+  // 保存済みの本日のセッションがあれば、その利用者を開いたときに戻す。
+  // 非同期の setState なので、effect 本体で直接 setState はしない。
+  useEffect(() => {
+    if (!selectedCustomerId) return;
+    if (restoredForCustomer.current === selectedCustomerId) return;
+    restoredForCustomer.current = selectedCustomerId;
+    const draft = loadSessionDraft(selectedCustomerId);
+    if (!draft || draft.screenshots.length === 0) return;
+    const apply = () => {
+      setBrainwaveScreenshots((current) => [
+        ...draft.screenshots,
+        ...current.filter(
+          (shot) => !(shot.customerId === selectedCustomerId && shot.scope === "trial"),
+        ),
+      ]);
+      setSessionSavedAt(draft.savedAt);
+      setToast("この端末に保存していた本日のセッションを読み込みました。");
+    };
+    const timer = window.setTimeout(apply, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedCustomerId]);
 
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
   const selectedBaseNote = allBaseNotes[selectedBase.id];
@@ -777,6 +809,11 @@ export default function OperatorKartePage() {
     .filter(Boolean)
     .join(" : ");
   const oilNameOptions = useMemo(() => Array.from(new Set([...allEssentialOils.map((oil) => oil.name), ...customOilNames])), [allEssentialOils]);
+  // 配合レシピのセレクターに出す名前。ベースブレンドと追加精油の両方を選べる。
+  const recipeMaterialOptions = useMemo(
+    () => [...allBaseBlends.map((blend) => `${blend.code} ${blend.name}`), ...oilNameOptions],
+    [allBaseBlends, oilNameOptions],
+  );
   const filteredOils = allEssentialOils.filter((oil) => {
     const matchesQuery = `${oil.name} ${oil.botanical_name} ${oil.scent_profile}`.toLowerCase().includes(oilQuery.toLowerCase());
     const matchesMood = oilMood === "all" || oil.mood_slugs.includes(oilMood);
@@ -823,6 +860,39 @@ export default function OperatorKartePage() {
     setSelectedBaseId(draft.baseBlendId);
     setMakerNote(draft.makerNote);
     setAddedOils(draft.formulaItems.map((item) => ({ ...item })));
+  }
+
+  /** 本日のセッションをこの端末に保存する。 */
+  async function saveTodaySession() {
+    if (!selectedCustomerId || sessionSaving) return;
+    setSessionSaving(true);
+    try {
+      const draft = await saveSessionDraft(selectedCustomerId, trialImages);
+      setSessionSavedAt(draft.savedAt);
+      setToast(`本日のセッション ${trialImages.length}枚をこの端末に保存しました。`);
+    } catch (error) {
+      setToast(
+        error instanceof SessionDraftTooLargeError
+          ? error.message
+          : "保存に失敗しました。もう一度お試しください。",
+      );
+    } finally {
+      setSessionSaving(false);
+    }
+  }
+
+  /** 保存した内容を破棄して、取り込み直しから始める。 */
+  function discardTodaySession() {
+    if (!selectedCustomerId) return;
+    clearSessionDraft(selectedCustomerId);
+    setSessionSavedAt("");
+    setToast("この端末に保存した本日のセッションを削除しました。");
+  }
+
+  /** グラフをダブルクリックしたとき。選択したうえで拡大表示を開く。 */
+  function expandBrainwaveImage(imageId: string) {
+    selectBrainwaveImage(imageId);
+    setViewerOpen(true);
   }
 
   /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
@@ -1156,17 +1226,45 @@ export default function OperatorKartePage() {
                       <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />本日のセッション</h2>
                       <p className="mt-1 text-xs text-[#827690]">
                         ベース候補の比較と追加精油の試作。1回の測定につき、左にリラックス度、右に集中度を並べます。
+                        グラフをダブルクリックすると拡大表示します。
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#f3effb] px-3 py-1 text-xs font-bold text-[#8d6fd1]">
-                      {trialRows.length} 回 / {trialImages.length} 枚
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#f3effb] px-3 py-1 text-xs font-bold text-[#8d6fd1]">
+                        {trialRows.length} 回 / {trialImages.length} 枚
+                      </span>
+                      <button
+                        type="button"
+                        onClick={saveTodaySession}
+                        disabled={sessionSaving || trialImages.length === 0}
+                        className="flex h-9 items-center gap-1.5 rounded-lg bg-[#8d6fd1] px-3 text-xs font-bold text-white transition hover:bg-[#7a5cc0] disabled:opacity-40"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        {sessionSaving ? "保存中…" : "本日のセッションを保存"}
+                      </button>
+                    </div>
                   </div>
+
+                  {sessionSavedAt ? (
+                    <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-[#f3effb] px-3 py-2 text-xs text-[#665a78]">
+                      <Check className="h-3.5 w-3.5 shrink-0 text-[#8d6fd1]" />
+                      この端末に保存済み（{new Date(sessionSavedAt).toLocaleString("ja-JP")}）。
+                      再読み込みしても、この利用者を開くと戻ります。
+                      <button
+                        type="button"
+                        onClick={discardTodaySession}
+                        className="underline underline-offset-2 hover:text-[#8d6fd1]"
+                      >
+                        保存を削除
+                      </button>
+                    </p>
+                  ) : null}
                   <div className="mt-4">
                     <BrainwaveTrialGrid
                       rows={trialRows}
                       activeImageId={activeImage?.id ?? ""}
                       onSelect={selectBrainwaveImage}
+                      onExpand={expandBrainwaveImage}
                       onRelabel={relabelTrial}
                       onSwap={swapTrialChannels}
                       emptyMessage="本日の測定はまだありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、1枚につき1回の測定として、リラックス度と集中度に切り分けて並びます。"
@@ -1191,6 +1289,7 @@ export default function OperatorKartePage() {
                       rows={decidedRows}
                       activeImageId={activeImage?.id ?? ""}
                       onSelect={selectBrainwaveImage}
+                      onExpand={expandBrainwaveImage}
                       emptyMessage="決定した組み合わせの測定はまだありません。本日のセッションから採用する回を決めると、ここに残ります。"
                     />
                   </div>
@@ -1288,7 +1387,7 @@ export default function OperatorKartePage() {
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><FileImage className="h-5 w-5 text-[#8d6fd1]" />画像プレビュー</h2>
-                      <p className="mt-1 text-xs text-[#827690]">選択画像を大きく確認</p>
+                      <p className="mt-1 text-xs text-[#827690]">グラフをダブルクリックしても拡大できます</p>
                     </div>
                     <button
                       disabled={!activeImage}
@@ -1415,7 +1514,31 @@ export default function OperatorKartePage() {
                         </div>
                         {calculatedRecipe.map((row) => (
                           <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_92px_92px_30px] gap-2">
-                            <input list="operator-oil-names" value={row.name} onChange={(event) => updateOil(row.id, { name: event.target.value })} className="field-input h-10" />
+                            <select
+                              value={row.name}
+                              onChange={(event) => updateOil(row.id, { name: event.target.value })}
+                              aria-label="材料"
+                              className="field-input h-10"
+                            >
+                              {/* 登録済みの名前でないものが入っていても選択が消えないよう、先頭に残す */}
+                              {!recipeMaterialOptions.includes(row.name) ? (
+                                <option value={row.name}>{row.name}</option>
+                              ) : null}
+                              <optgroup label="ベースブレンド">
+                                {allBaseBlends.map((blend) => (
+                                  <option key={blend.id} value={`${blend.code} ${blend.name}`}>
+                                    {blend.code} {blend.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              <optgroup label="エッセンシャルオイル">
+                                {oilNameOptions.map((name) => (
+                                  <option key={name} value={name}>
+                                    {name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
                             <input
                               value={row.amountUl}
                               onChange={(event) => updateOil(row.id, { amountUl: event.target.value })}
@@ -1431,10 +1554,6 @@ export default function OperatorKartePage() {
                           </div>
                         ))}
                       </div>
-                      <datalist id="operator-oil-names">
-                        {allBaseBlends.map((blend) => <option key={blend.id} value={`${blend.code} ${blend.name}`} />)}
-                        {oilNameOptions.map((name) => <option key={name} value={name} />)}
-                      </datalist>
                     </div>
                     <Field label="作成者メモ">
                       <textarea value={makerNote} onChange={(event) => setMakerNote(event.target.value)} className="field-input min-h-24 py-2" />
