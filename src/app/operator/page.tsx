@@ -28,13 +28,14 @@ import {
 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
+import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
 import { calculateAge as calculateClientAge, operatorClients } from "@/data/operatorClients";
 import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
 import { usePrivateBaseRecipes } from "@/hooks/usePrivateBaseRecipes";
 import { useViewerRole } from "@/hooks/useViewerRole";
 import { canDisclose, disclosureLevelForRole, DISCLOSURE_DESCRIPTIONS } from "@/lib/disclosure";
-import type { BrainwaveScreenshot, BrainwaveSession } from "@/types/brainwave";
+import type { BrainwaveScreenshot, BrainwaveSession, ScreenshotScope } from "@/types/brainwave";
 import { essentialOils } from "@/data/essentialOils";
 import type { AromaRecord, BaseBlend, EssentialOil } from "@/types/aroma";
 import type { Profile } from "@/types/profile";
@@ -534,39 +535,124 @@ const moodFilters = [
  * デモ用の脳波画像。
  *
  * FocusCalm の測定画面に出るグラフカードを再現した PNG を使う。
- * 制作記録1件につきリラックス度と集中度の2枚を持たせる。
- * α〜θ の5帯域はカルテの画像としては持たせない（CSVに保管する方針）。
+ * 1回の測定でリラックス度と集中度の2枚が出るので、必ず対で持たせる。
+ * α〜θ の5帯域はカルテの画像としては持たない（CSVに保管する方針）。
  */
-const initialScreenshots: BrainwaveScreenshot[] = operatorAromas.flatMap((record, index) => {
-  const variant = (index % 4) + 1;
-  const measuredAt = `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`;
+function makePair(options: {
+  idPrefix: string;
+  customerId: string;
+  trialNo: number;
+  trialLabel: string;
+  variant: number;
+  measuredAt: string;
+  uploadedAt: string;
+  scope: ScreenshotScope;
+}): BrainwaveScreenshot[] {
   const base = {
-    customerId: record.user_id,
-    measuredAt,
-    uploadedAt: record.made_at,
+    customerId: options.customerId,
+    measuredAt: options.measuredAt,
+    uploadedAt: options.uploadedAt,
     detectionReason: "デモデータ",
     note: "",
     source: "sample" as const,
+    scope: options.scope,
+    trialNo: options.trialNo,
+    trialLabel: options.trialLabel,
   };
   return [
     {
       ...base,
-      id: `${record.brainwave_image_id}-relax`,
-      title: `${record.title} / リラックス度`,
-      src: `/demo/brainwave/relax-${variant}.png`,
-      channels: ["relax" as const],
-      contentHash: `sample-${record.brainwave_image_id}-relax`,
+      id: `${options.idPrefix}-relax`,
+      title: `${options.trialLabel} / リラックス度`,
+      src: `/demo/brainwave/relax-${options.variant}.png`,
+      channels: ["relax"],
+      contentHash: `sample-${options.idPrefix}-relax`,
     },
     {
       ...base,
-      id: `${record.brainwave_image_id}-focus`,
-      title: `${record.title} / 集中度`,
-      src: `/demo/brainwave/focus-${variant}.png`,
-      channels: ["focus" as const],
-      contentHash: `sample-${record.brainwave_image_id}-focus`,
+      id: `${options.idPrefix}-focus`,
+      title: `${options.trialLabel} / 集中度`,
+      src: `/demo/brainwave/focus-${options.variant}.png`,
+      channels: ["focus"],
+      contentHash: `sample-${options.idPrefix}-focus`,
     },
   ];
-});
+}
+
+/** 過去に決定した組み合わせの測定。カルテの記録として残るもの。 */
+const decidedScreenshots: BrainwaveScreenshot[] = operatorAromas.flatMap((record, index) =>
+  makePair({
+    idPrefix: record.brainwave_image_id,
+    customerId: record.user_id,
+    trialNo: index + 1,
+    trialLabel: record.title,
+    variant: (index % 4) + 1,
+    measuredAt: `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`,
+    uploadedAt: record.made_at,
+    scope: "decided",
+  }),
+);
+
+/**
+ * 制作記録を持たない方にも、過去に決定した測定を持たせる。
+ * 決定稿の枠が空のままだと、本日分との使い分けが画面から読み取れないため。
+ */
+const clientsWithoutRecords = operatorClients.filter(
+  (client) => !operatorAromas.some((record) => record.user_id === client.userId),
+);
+
+const pastDecidedScreenshots: BrainwaveScreenshot[] = clientsWithoutRecords.flatMap(
+  (client, index) =>
+    makePair({
+      idPrefix: `past-${client.userId}`,
+      customerId: client.userId,
+      trialNo: 1,
+      trialLabel: `${client.lastVisitAt} にお渡しした香り`,
+      variant: (index % 4) + 1,
+      measuredAt: `${client.lastVisitAt} 15:${String((index * 13) % 60).padStart(2, "0")}`,
+      uploadedAt: client.lastVisitAt,
+      scope: "decided",
+    }),
+);
+
+/**
+ * 本日のセッションで試した測定のデモ。
+ *
+ * 1人あたり7回前後というのが実際の運用なので、その枚数で並びを確認できるようにする。
+ * 前半はベース候補の比較、後半は追加精油の試作。
+ */
+const TODAY_TRIALS = [
+  "測定のみ（香りなし）",
+  "ベース候補① Elegant Harmony",
+  "ベース候補② Woody Restore",
+  "ベース候補③ Serene Dreams",
+  "②＋ベルガモット 1滴",
+  "②＋フランキンセンス 1滴",
+  "②＋ベルガモット・フランキンセンス",
+];
+
+const todaySessionDate = "2026-05-26";
+
+const trialScreenshots: BrainwaveScreenshot[] = operatorCustomers.flatMap((customer) =>
+  TODAY_TRIALS.flatMap((label, index) =>
+    makePair({
+      idPrefix: `trial-${customer.user_id}-${index + 1}`,
+      customerId: customer.user_id,
+      trialNo: index + 1,
+      trialLabel: label,
+      variant: (index % 4) + 1,
+      measuredAt: `${todaySessionDate} ${String(13 + Math.floor(index / 3)).padStart(2, "0")}:${String((index * 11) % 60).padStart(2, "0")}`,
+      uploadedAt: todaySessionDate,
+      scope: "trial",
+    }),
+  ),
+);
+
+const initialScreenshots: BrainwaveScreenshot[] = [
+  ...trialScreenshots,
+  ...decidedScreenshots,
+  ...pastDecidedScreenshots,
+];
 
 const customOilNames = ["ローズウッド", "カモミール", "ローマンカモミール"];
 
@@ -657,6 +743,12 @@ export default function OperatorKartePage() {
     return image.channels.some((channel) => channel === "relax" || channel === "focus");
   });
   const activeImage = customerImages.find((image) => image.id === selectedImageId) ?? customerImages[0];
+  // 本日試した測定と、決定した組み合わせの測定を分けて並べる。
+  const trialImages = customerImages.filter((image) => image.scope === "trial");
+  const decidedImages = customerImages.filter((image) => image.scope === "decided");
+  const trialRows = groupIntoTrials(trialImages);
+  const decidedRows = groupIntoTrials(decidedImages);
+
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
   const selectedBaseNote = allBaseNotes[selectedBase.id];
   const customerRecords = operatorAromas.filter((record) => record.user_id === selectedCustomerId);
@@ -731,6 +823,33 @@ export default function OperatorKartePage() {
     setSelectedBaseId(draft.baseBlendId);
     setMakerNote(draft.makerNote);
     setAddedOils(draft.formulaItems.map((item) => ({ ...item })));
+  }
+
+  /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
+  function relabelTrial(trialNo: number, label: string) {
+    setBrainwaveScreenshots((current) =>
+      current.map((shot) =>
+        shot.customerId === selectedCustomerId && shot.scope === "trial" && shot.trialNo === trialNo
+          ? { ...shot, trialLabel: label }
+          : shot,
+      ),
+    );
+  }
+
+  /** 実機の並びが逆だったとき用。その回のリラックス度と集中度を入れ替える。 */
+  function swapTrialChannels(trialNo: number) {
+    setBrainwaveScreenshots((current) =>
+      current.map((shot) => {
+        if (shot.customerId !== selectedCustomerId || shot.scope !== "trial" || shot.trialNo !== trialNo) {
+          return shot;
+        }
+        const swapped = shot.channels.map((channel) =>
+          channel === "relax" ? "focus" : channel === "focus" ? "relax" : channel,
+        );
+        return { ...shot, channels: swapped, detectionReason: "手動で左右を入れ替え" };
+      }),
+    );
+    setToast(`第${trialNo}回のリラックス度と集中度を入れ替えました。`);
   }
 
   function selectBrainwaveImage(imageId: string) {
@@ -1032,32 +1151,49 @@ export default function OperatorKartePage() {
                 {karteTab === "measurements" ? (
                   <>
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />脳波画像</h2>
-                    <p className="mt-1 text-xs text-[#827690]">リラックス度と集中度のグラフを並べます。選択すると右側で大きく確認できます。</p>
-                  </div>
-                  {customerImages.length === 0 ? (
-                    <p className="mt-4 rounded-lg border border-dashed border-[#ddd6ea] bg-[#faf8fe] p-6 text-center text-xs leading-5 text-[#827690]">
-                      まだ脳波画像がありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、グラフが自動で切り出されてここに並びます。
-                    </p>
-                  ) : (
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                      {customerImages.map((image) => (
-                        <button
-                          key={image.id}
-                          type="button"
-                          onClick={() => selectBrainwaveImage(image.id)}
-                          className={`overflow-hidden rounded-lg border bg-white text-left transition ${activeImage?.id === image.id ? "border-[#8d6fd1] shadow-md shadow-[#8d6fd1]/12" : "border-[#e4dff0] hover:border-[#b7a5dd]"}`}
-                        >
-                          <img src={image.src} alt={image.title} className="h-28 w-full object-cover" />
-                          <div className="space-y-1 p-3">
-                            <p className="truncate text-sm font-bold text-[#3b3152]">{image.title}</p>
-                            <p className="text-xs text-[#7b708d]">{image.measuredAt}</p>
-                          </div>
-                        </button>
-                      ))}
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />本日のセッション</h2>
+                      <p className="mt-1 text-xs text-[#827690]">
+                        ベース候補の比較と追加精油の試作。1回の測定につき、左にリラックス度、右に集中度を並べます。
+                      </p>
                     </div>
-                  )}
+                    <span className="rounded-full bg-[#f3effb] px-3 py-1 text-xs font-bold text-[#8d6fd1]">
+                      {trialRows.length} 回 / {trialImages.length} 枚
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <BrainwaveTrialGrid
+                      rows={trialRows}
+                      activeImageId={activeImage?.id ?? ""}
+                      onSelect={selectBrainwaveImage}
+                      onRelabel={relabelTrial}
+                      onSwap={swapTrialChannels}
+                      emptyMessage="本日の測定はまだありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、1枚につき1回の測定として、リラックス度と集中度に切り分けて並びます。"
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><ListTree className="h-5 w-5 text-[#8d6fd1]" />決定した組み合わせの測定</h2>
+                      <p className="mt-1 text-xs text-[#827690]">
+                        過去にお渡しした香りを決めたときの測定です。カルテの記録として残ります。
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#f3effb] px-3 py-1 text-xs font-bold text-[#8d6fd1]">
+                      {decidedRows.length} 件
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <BrainwaveTrialGrid
+                      rows={decidedRows}
+                      activeImageId={activeImage?.id ?? ""}
+                      onSelect={selectBrainwaveImage}
+                      emptyMessage="決定した組み合わせの測定はまだありません。本日のセッションから採用する回を決めると、ここに残ります。"
+                    />
+                  </div>
                 </section>
 
                 <BrainwaveIntakePanel

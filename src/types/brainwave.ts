@@ -137,8 +137,19 @@ export type BrainwaveSession = {
 };
 
 /**
- * iPad のスクリーンショット。
- * 1枚に2つのグラフが写り、4枚撮ると重複しながら7波形が揃う運用を前提とする。
+ * 測定画像の位置づけ。
+ *
+ * trial   本日のセッションで試した測定。ベース候補の比較、追加精油の試作で
+ *         1人あたり7回前後（= リラックス度と集中度で14枚）になる。
+ * decided 決定した組み合わせの測定。カルテの記録として残す。
+ */
+export type ScreenshotScope = "trial" | "decided";
+
+/**
+ * iPad のスクリーンショットから切り出した1枚のグラフ。
+ *
+ * 1回の測定でリラックス度と集中度の2枚が出る。同じ回の2枚は `trialNo` で
+ * まとめ、画面では左にリラックス度、右に集中度を並べる。
  */
 export type BrainwaveScreenshot = {
   id: string;
@@ -155,4 +166,10 @@ export type BrainwaveScreenshot = {
   uploadedAt: string;
   note: string;
   source: "sample" | "upload";
+  /** 本日の試作測定か、決定した組み合わせの測定か。 */
+  scope: ScreenshotScope;
+  /** 同じ測定回をまとめる番号。1から始まる。 */
+  trialNo: number;
+  /** その回に試した内容。「ベース候補② Woody Restore」「＋ベルガモット1滴」など。 */
+  trialLabel: string;
 };

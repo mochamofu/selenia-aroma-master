@@ -148,19 +148,43 @@ export function BrainwaveIntakePanel({
     // 1枚のスクリーンショットに写っているグラフカードを切り出してから取り込む
     const result = await intakeScreenshotPanels(usable, existingHashes);
 
-    const added: BrainwaveScreenshot[] = result.accepted.map((item) => ({
-      id: nextId("eeg-panel"),
-      customerId,
-      title: `${item.sourceFileName.replace(/\.[^.]+$/, "")}（${item.indexInSource}/${item.totalInSource}）`,
-      src: item.panel.objectUrl,
-      channels: item.guessedChannels,
-      detectionReason: item.detectionReason,
-      contentHash: item.contentHash,
-      measuredAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-      uploadedAt: new Date().toISOString().slice(0, 10),
-      note: "",
-      source: "upload",
-    }));
+    // 取り込むスクショは1枚が1回の測定。写っている2枚のグラフを同じ回としてまとめる。
+    // 実機の並びはリラックス度と集中度で固定なので、位置から割り当てておき、
+    // 逆だった場合は行ごとの「左右を入れ替える」で直せるようにする。
+    let nextTrialNo =
+      screenshots
+        .filter((shot) => shot.customerId === customerId && shot.scope === "trial")
+        .reduce((max, shot) => Math.max(max, shot.trialNo), 0) + 1;
+    const trialNoBySource = new Map<string, number>();
+    const measuredAt = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+    const added: BrainwaveScreenshot[] = result.accepted.map((item) => {
+      if (!trialNoBySource.has(item.sourceFileName)) {
+        trialNoBySource.set(item.sourceFileName, nextTrialNo);
+        nextTrialNo += 1;
+      }
+      const trialNo = trialNoBySource.get(item.sourceFileName)!;
+      // 位置からの割り当て。1枚目=リラックス度、2枚目=集中度。
+      const positional: BrainwaveChannel = item.indexInSource === 1 ? "relax" : "focus";
+      const channels = item.guessedChannels.length > 0 ? item.guessedChannels : [positional];
+      return {
+        id: nextId("eeg-panel"),
+        customerId,
+        title: `第${trialNo}回 / ${BRAINWAVE_CHANNEL_META[channels[0]].shortLabel}`,
+        src: item.panel.objectUrl,
+        channels,
+        detectionReason:
+          item.guessedChannels.length > 0 ? item.detectionReason : "画面内の並び順から割り当て",
+        contentHash: item.contentHash,
+        measuredAt,
+        uploadedAt: new Date().toISOString().slice(0, 10),
+        note: "",
+        source: "upload",
+        scope: "trial",
+        trialNo,
+        trialLabel: `第${trialNo}回`,
+      };
+    });
 
     if (added.length > 0) {
       onScreenshotsChange((current) => [...added, ...current]);
