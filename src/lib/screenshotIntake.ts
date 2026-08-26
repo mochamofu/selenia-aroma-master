@@ -2,13 +2,14 @@ import { BRAINWAVE_CHANNELS, type BrainwaveChannel } from "@/types/brainwave";
 import { splitScreenshotIntoGraphs, type GraphPanel } from "@/lib/screenshotSplit";
 
 /**
- * iPad から取り込んだ測定スクリーンショットの重複除去と波形種別の推定。
+ * 測定スクリーンショットの重複除去と波形種別の推定。
  *
- * 運用前提: 1画面に2グラフが写り、4枚撮ると重複を含みながら7波形が揃う。
- * そのため「同じグラフが2回入ってくる」ことを前提に重複判定を行う。
+ * 1画面に写るグラフの数は端末の向きで変わる（iPad縦=3つ / iPad横=2つ / iPhone=2つ）。
+ * 全7波形を集めるには複数回撮ることになり、その過程で同じグラフが重複して入る。
+ * 重複はここで落とす。
  *
  * 種別の判定は、画像内の文字を読む OCR ではなく
- * (1) ファイル名 (2) 操作者の手動指定 で決まる。
+ * (1) ファイル名 (2) 撮影順 (3) 操作者の手動指定 で決まる。
  * 画素からの自動ラベル付けは行わないので、推定結果は必ず UI 上で確認・修正できるようにすること。
  */
 
@@ -21,12 +22,16 @@ const HASH_GRID = 32;
 /**
  * 同一グラフとみなすハミング距離のしきい値（1024bit中）。
  *
- * ここは意図的にかなり厳しくしている。除外したいのは「4枚撮りで必ず生じる
- * 完全重複の1枚」だけであり、波形が違うだけの別グラフを消してはいけない。
- * 平均ハッシュ（aHash）だと白背景が支配的なグラフ同士がほぼ同じ値になり、
- * 別の波形まで重複と誤判定したため、勾配を見る差分ハッシュ（dHash）に変更した。
+ * 実測（測定アプリのスクリーンショットで計測）:
+ *   同一グラフ（手書きの重なり方が違うだけ） … 7
+ *   別の波形どうし                          … 66 / 71 / 72
+ * 明確に分かれるので、その中間で余裕を取って 24 とした。
+ *
+ * 誤って別の波形を消すほうが、重複が1枚残るより損失が大きい
+ * （残った重複は操作者が消せるが、消えたグラフは戻らない）ため、
+ * 中間よりやや厳しい側に寄せている。
  */
-const DUPLICATE_DISTANCE_THRESHOLD = 8;
+const DUPLICATE_DISTANCE_THRESHOLD = 24;
 
 export type ScreenshotAnalysis = {
   /** 知覚ハッシュ（16進文字列）。近い画像同士は距離が小さくなる。 */
@@ -173,17 +178,18 @@ export function findUncoveredChannels(assigned: BrainwaveChannel[][]): Brainwave
 
 
 /**
- * 4枚のスクリーンショットを、グラフ1枚ずつの画像へ切り分けて取り込む。
+ * 複数のスクリーンショットを、グラフ1枚ずつの画像へ切り分けて取り込む。
  *
- * 1枚に2グラフ入るので 4枚 → 8枚のグラフになり、そのうち1枚が重複する。
- * 重複を落として7枚にするところまでをここで行う。
+ * 1画面に写る枚数は端末の向きで変わる（iPad横=2つ / iPad縦=3つ / iPhone=2つ）ので、
+ * 枚数は決め打ちせず、写っているぶんだけ取り出して重複を落とす。
  */
 export type PanelIntakeItem = {
   panel: GraphPanel;
   /** 元になったスクリーンショットのファイル名。 */
   sourceFileName: string;
-  /** 元画像の中で上半分か下半分か。撮影順の割り当てに使う。 */
-  positionInSource: "上" | "下";
+  /** 元画像の中で何番目のグラフか（上から数える）。 */
+  indexInSource: number;
+  totalInSource: number;
   contentHash: string;
   guessedChannels: BrainwaveChannel[];
   detectionReason: string;
@@ -194,7 +200,7 @@ export type PanelIntakeResult = {
   /** 完全に同じグラフとして除外したもの。 */
   duplicates: PanelIntakeItem[];
   failures: Array<{ fileName: string; message: string }>;
-  /** 分割時の注意書き（境目を自動検出できなかった等）。 */
+  /** 切り出し時の注意書き（切れたカードの除外など）。 */
   warnings: string[];
 };
 
@@ -214,15 +220,15 @@ export async function intakeScreenshotPanels(
 
       for (const [index, panel] of split.panels.entries()) {
         const contentHash = await computePerceptualHash(panel.blob);
-        const positionInSource = index === 0 ? "上" : "下";
 
-        // ファイル名から2つ拾えていれば、上下の順で1つずつ割り当てる
+        // ファイル名から枚数分ちょうど拾えていれば、並び順で1つずつ割り当てる
         const guessedChannels = guessed.length === split.panels.length ? [guessed[index]] : [];
 
         const item: PanelIntakeItem = {
           panel,
           sourceFileName: file.name,
-          positionInSource,
+          indexInSource: index + 1,
+          totalInSource: split.panels.length,
           contentHash,
           guessedChannels,
           detectionReason: guessedChannels.length
@@ -231,7 +237,7 @@ export async function intakeScreenshotPanels(
         };
 
         if (isDuplicateHash(contentHash, seenHashes)) {
-          // 4枚撮りで必ず1枚重複するので、これは想定内の除外
+          // 端末の向きによっては次の撮影と重なるグラフが出る。想定内の除外。
           URL.revokeObjectURL(panel.objectUrl);
           result.duplicates.push(item);
           continue;

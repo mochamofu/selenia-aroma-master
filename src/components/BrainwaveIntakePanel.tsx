@@ -145,13 +145,13 @@ export function BrainwaveIntakePanel({
       .filter((shot) => shot.customerId === customerId)
       .map((shot) => shot.contentHash);
 
-    // 1枚のスクリーンショットを上下2つのグラフへ切り分けてから取り込む
+    // 1枚のスクリーンショットに写っているグラフカードを切り出してから取り込む
     const result = await intakeScreenshotPanels(usable, existingHashes);
 
     const added: BrainwaveScreenshot[] = result.accepted.map((item) => ({
       id: nextId("eeg-panel"),
       customerId,
-      title: `${item.sourceFileName.replace(/\.[^.]+$/, "")}（${item.positionInSource}）`,
+      title: `${item.sourceFileName.replace(/\.[^.]+$/, "")}（${item.indexInSource}/${item.totalInSource}）`,
       src: item.panel.objectUrl,
       channels: item.guessedChannels,
       detectionReason: item.detectionReason,
@@ -273,7 +273,7 @@ export function BrainwaveIntakePanel({
           </label>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#d98aa8] px-3 text-xs font-bold text-white transition hover:bg-[#c87598]">
             <ImageUp className="h-4 w-4" />
-            スクショ4枚を取り込む
+            測定画面のスクショを取り込む
             <input
               className="sr-only"
               type="file"
@@ -438,10 +438,12 @@ export function BrainwaveIntakePanel({
         </div>
 
         <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
-          <strong className="font-bold">4枚まとめて選択してください。</strong>
-          1枚に2つ写っているグラフを自動で上下に切り分け、グラフごとの画像として保管します。
-          4枚 → 8枚のうち重複する1枚は自動で除外するので、7波形が残ります。
-          切り抜きの手作業は不要です。
+          <strong className="font-bold">7波形が揃うまで撮ったスクショを、まとめて選択してください。</strong>
+          測定画面に並ぶグラフのカードを自動で1枚ずつ切り出し、グラフごとの画像として保管します。
+          重複したグラフと、下端で切れたグラフは自動で除外します。切り抜きの手作業は不要です。
+          <br />
+          <strong className="font-bold">おすすめは iPad を縦向きにして3回撮る方法です。</strong>
+          1画面に3つ写るので、横向き（2つ×4回）より撮影回数が少なくて済みます。
           <br />
           <strong className="font-bold">波形の種類だけは自動で判別できません。</strong>
           機器の表示順が毎回同じなら「撮影順で一括割り当て」が使えます。違う場合は各カードのタグで指定してください。

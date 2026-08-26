@@ -1,174 +1,107 @@
 /**
- * iPad の測定スクリーンショットから、グラフを1枚ずつ切り出す。
+ * 測定アプリ（FocusCalm ローカル計測）のスクリーンショットから、
+ * グラフを1枚ずつ切り出す。
  *
- * 運用: 1画面に2つのグラフが縦に並ぶ。7波形あるので4回撮影し、
- * 合計8枚のグラフのうち1枚が重複する。
+ * 実際の画面構造:
+ *   - 背景は水色（明るい）
+ *   - グラフは「黒に近いダークカード（角丸）」として並ぶ
+ *   - 上部にヘッダー（X / ローカル計測 / 脳アイコン）
+ *   - 下部に「脳波データを転送」（白ボタン）と「再計測」（黒ボタン）
+ *   - 端末の向きによって、1画面に写る完全なグラフの数が変わる
+ *       iPad 横      … 2つ
+ *       iPad 縦      … 3つ（＋下端に切れた4つ目）
+ *       iPhone 縦    … 2つ
  *
- * ここでやること:
- *   1枚のスクリーンショット → 上下2つのグラフ画像へ分割 → 余白を切り落とす
+ * したがって「1枚を上下半分に割る」のではなく、
+ * **暗いカードを検出して、完全に写っているものだけを取り出す**。
+ * 画面に何個写っていても対応できるので、端末の向きを問わない。
  *
- * 「画像を50%で割る」方式は、アプリのヘッダーがあったり下部に大きな余白が
- * あると位置がずれる。代わりに、模様のあるかたまり（グラフ）を直接検出し、
- * インク量の多い上位2つをグラフとして取り出す。
- * 2つ見つからない場合は、その旨を warnings で返す。
+ * 手書きの注釈（黄・赤のペン）はシステムの表示ではないため、検出では無視される。
+ * カードの上に書かれていてもカードの暗さは保たれるので、判定に影響しない。
  */
 
 export type SplitOptions = {
-  /**
-   * 行が「背景」かどうかの判定に使う輝度の標準偏差のしきい値。
-   * これ以下なら、その行にはグラフの線が無いとみなす。
-   */
-  backgroundStdDev?: number;
-  /** かたまりを連結する隙間の許容量（画像高さに対する割合）。 */
+  /** これより暗い画素を「カードの内側」とみなす輝度のしきい値。 */
+  darkLuminance?: number;
+  /** 行のうちこの割合以上が暗ければ、その行はカード内とみなす。 */
+  darkRowRatio?: number;
+  /** 角丸などで途切れた行をつなぐ許容量（画像高さに対する割合）。 */
   bridgeGapRatio?: number;
-  /** 切り出し後に残す余白（ピクセル）。 */
+  /** カードとして扱う最小の高さ（画像高さに対する割合）。 */
+  minCardHeightRatio?: number;
+  /**
+   * いちばん大きいカードに対する高さの比。これ未満は
+   * 「下端で切れたカード」や「再計測ボタン」とみなして除外する。
+   */
+  relativeHeightFloor?: number;
+  /** 切り出しに残す余白（ピクセル）。 */
   padding?: number;
-  /** 切り出した画像の最小の高さ。これ未満なら分割失敗とみなす。 */
-  minPanelHeight?: number;
 };
 
 const DEFAULTS: Required<SplitOptions> = {
-  backgroundStdDev: 4,
-  bridgeGapRatio: 0.04,
-  padding: 6,
-  minPanelHeight: 60,
+  darkLuminance: 100,
+  darkRowRatio: 0.5,
+  bridgeGapRatio: 0.01,
+  minCardHeightRatio: 0.05,
+  relativeHeightFloor: 0.5,
+  padding: 4,
 };
 
 export type GraphPanel = {
-  /** 元画像内での位置。UIで分割位置を見せるために持つ。 */
   top: number;
   height: number;
+  width: number;
   blob: Blob;
   objectUrl: string;
-  width: number;
 };
 
 export type SplitResult = {
   panels: GraphPanel[];
-  /** グラフのかたまりを2つ検出できたか。 */
+  /** 完全に写っているカードを1つ以上取り出せたか。 */
   detected: boolean;
+  /** 下端で切れていて除外したカードの数。 */
+  partialCount: number;
   sourceWidth: number;
   sourceHeight: number;
-  /** UIに出す注意書き。 */
   warnings: string[];
 };
 
-/** 1行分の輝度の標準偏差。グラフの線がある行ほど大きくなる。 */
-function rowStdDev(data: Uint8ClampedArray, width: number, y: number): number {
-  let sum = 0;
-  let sumSq = 0;
+/** その行のうち、暗い画素が占める割合。カード内なら1に近づく。 */
+function darkFractionOfRow(
+  data: Uint8ClampedArray,
+  width: number,
+  y: number,
+  darkLuminance: number,
+): number {
+  let dark = 0;
   const base = y * width * 4;
   for (let x = 0; x < width; x += 1) {
     const i = base + x * 4;
     const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    sum += lum;
-    sumSq += lum * lum;
+    if (lum < darkLuminance) dark += 1;
   }
-  const mean = sum / width;
-  return Math.sqrt(Math.max(0, sumSq / width - mean * mean));
+  return dark / width;
 }
 
-function columnStdDev(
+/** 指定行で、暗い画素が左右どこからどこまで続いているか。 */
+function darkBoundsOfRow(
   data: Uint8ClampedArray,
   width: number,
-  x: number,
-  top: number,
-  bottom: number,
-): number {
-  let sum = 0;
-  let sumSq = 0;
-  const count = bottom - top;
-  for (let y = top; y < bottom; y += 1) {
-    const i = (y * width + x) * 4;
-    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    sum += lum;
-    sumSq += lum * lum;
-  }
-  const mean = sum / count;
-  return Math.sqrt(Math.max(0, sumSq / count - mean * mean));
-}
-
-/**
- * 模様がある行の連続区間（＝コンテンツのかたまり）を列挙する。
- *
- * 「中央で半分に割る」方式は、ヘッダーがあったり下部に大きな余白があると
- * 割る位置がずれる。グラフのかたまりを直接見つけるほうが確実なので、
- * こちらを採用している。
- *
- * グラフのタイトルと波形の間の細い余白で分断されないよう、
- * `bridgeGap` 行までの隙間はつないで1つのかたまりとして扱う。
- */
-function findContentBlocks(
-  rowScores: number[],
-  threshold: number,
-  bridgeGap: number,
-  minHeight: number,
-): Array<{ start: number; end: number; ink: number }> {
-  const raw: Array<{ start: number; end: number }> = [];
-  let start = -1;
-  for (let y = 0; y < rowScores.length; y += 1) {
-    const hasContent = rowScores[y] > threshold;
-    if (hasContent && start === -1) start = y;
-    if (!hasContent && start !== -1) {
-      raw.push({ start, end: y });
-      start = -1;
-    }
-  }
-  if (start !== -1) raw.push({ start, end: rowScores.length });
-
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const run of raw) {
-    const last = merged[merged.length - 1];
-    if (last && run.start - last.end <= bridgeGap) last.end = run.end;
-    else merged.push({ ...run });
-  }
-
-  return merged
-    .filter((block) => block.end - block.start >= minHeight)
-    .map((block) => {
-      let ink = 0;
-      for (let y = block.start; y < block.end; y += 1) ink += rowScores[y];
-      return { ...block, ink };
-    });
-}
-
-/**
- * 指定範囲の中で、実際に模様がある領域の外接矩形を求める。
- * グラフの周りの余白を落とすために使う。
- */
-function findContentBounds(
-  data: Uint8ClampedArray,
-  width: number,
-  regionTop: number,
-  regionBottom: number,
-  options: Required<SplitOptions>,
-): { top: number; bottom: number; left: number; right: number } | null {
-  let top = -1;
-  let bottom = -1;
-  for (let y = regionTop; y < regionBottom; y += 1) {
-    if (rowStdDev(data, width, y) > options.backgroundStdDev) {
-      if (top === -1) top = y;
-      bottom = y;
-    }
-  }
-  if (top === -1) return null;
-
+  y: number,
+  darkLuminance: number,
+): { left: number; right: number } | null {
   let left = -1;
   let right = -1;
+  const base = y * width * 4;
   for (let x = 0; x < width; x += 1) {
-    if (columnStdDev(data, width, x, top, bottom + 1) > options.backgroundStdDev) {
+    const i = base + x * 4;
+    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    if (lum < darkLuminance) {
       if (left === -1) left = x;
       right = x;
     }
   }
-  if (left === -1) return null;
-
-  return {
-    top: Math.max(regionTop, top - options.padding),
-    bottom: Math.min(regionBottom, bottom + options.padding + 1),
-    left: Math.max(0, left - options.padding),
-    right: Math.min(width, right + options.padding + 1),
-  };
+  return left === -1 ? null : { left, right };
 }
 
 function cropToBlob(
@@ -192,7 +125,10 @@ function cropToBlob(
   });
 }
 
-/** スクリーンショット1枚から、写っている2つのグラフを切り出す。 */
+/**
+ * スクリーンショット1枚から、写っているグラフカードをすべて切り出す。
+ * 下端で切れているカードは取り込まない（次の撮影で完全な形が入るため）。
+ */
 export async function splitScreenshotIntoGraphs(
   file: Blob,
   options: SplitOptions = {},
@@ -211,48 +147,87 @@ export async function splitScreenshotIntoGraphs(
     context.drawImage(bitmap, 0, 0);
     const { data } = context.getImageData(0, 0, width, height);
 
-    const rowScores: number[] = [];
-    for (let y = 0; y < height; y += 1) rowScores.push(rowStdDev(data, width, y));
-
-    const bridgeGap = Math.max(4, Math.round(height * settings.bridgeGapRatio));
-    const blocks = findContentBlocks(
-      rowScores,
-      settings.backgroundStdDev,
-      bridgeGap,
-      settings.minPanelHeight,
-    );
-
-    // インク量の多い順に2つ取り、元の縦位置の順に並べ直す。
-    // アプリのヘッダーやタブバーは細くインクも少ないので、ここで自然に落ちる。
-    const graphBlocks = [...blocks]
-      .sort((a, b) => b.ink - a.ink)
-      .slice(0, 2)
-      .sort((a, b) => a.start - b.start);
-
-    const detected = graphBlocks.length === 2;
-    if (blocks.length === 0) {
-      warnings.push("グラフらしい領域が見つかりませんでした。取り込みをスキップしました。");
-    } else if (!detected) {
-      warnings.push(
-        `グラフを${graphBlocks.length}つしか検出できませんでした。1画面に2つ写っているか確認してください。`,
-      );
+    // 1) 各行が「カードの内側か」を判定する
+    const isCardRow: boolean[] = [];
+    for (let y = 0; y < height; y += 1) {
+      isCardRow.push(darkFractionOfRow(data, width, y, settings.darkLuminance) >= settings.darkRowRatio);
     }
 
+    // 2) 連続する行をまとめてカード候補にする（角丸の欠けは埋める）
+    const bridgeGap = Math.max(2, Math.round(height * settings.bridgeGapRatio));
+    const runs: Array<{ start: number; end: number }> = [];
+    let start = -1;
+    for (let y = 0; y < height; y += 1) {
+      if (isCardRow[y] && start === -1) start = y;
+      if (!isCardRow[y] && start !== -1) {
+        runs.push({ start, end: y });
+        start = -1;
+      }
+    }
+    if (start !== -1) runs.push({ start, end: height });
+
+    const merged: Array<{ start: number; end: number }> = [];
+    for (const run of runs) {
+      const last = merged[merged.length - 1];
+      if (last && run.start - last.end <= bridgeGap) last.end = run.end;
+      else merged.push({ ...run });
+    }
+
+    const minHeight = Math.max(24, Math.round(height * settings.minCardHeightRatio));
+    const candidates = merged.filter((run) => run.end - run.start >= minHeight);
+
+    if (candidates.length === 0) {
+      warnings.push(
+        "グラフのカードが見つかりませんでした。測定結果の画面が写っているか確認してください。",
+      );
+      return { panels: [], detected: false, partialCount: 0, sourceWidth: width, sourceHeight: height, warnings };
+    }
+
+    // 3) いちばん大きいカードを基準に、明らかに低いものを落とす。
+    //    「再計測」ボタン（黒くて短い）と、下端で切れたカードがここで外れる。
+    const maxHeight = Math.max(...candidates.map((run) => run.end - run.start));
+    const floor = maxHeight * settings.relativeHeightFloor;
+    const complete = candidates.filter((run) => run.end - run.start >= floor);
+    const partialCount = candidates.length - complete.length;
+
+    // 4) カードごとに左右の端を求めて切り出す
     const panels: GraphPanel[] = [];
-    for (const block of graphBlocks) {
-      const bounds = findContentBounds(data, width, block.start, block.end, settings);
+    for (const run of complete) {
+      const probeY = Math.floor((run.start + run.end) / 2);
+      const bounds = darkBoundsOfRow(data, width, probeY, settings.darkLuminance);
       if (!bounds) continue;
-      const blob = await cropToBlob(bitmap, bounds);
+
+      const rect = {
+        left: Math.max(0, bounds.left - settings.padding),
+        right: Math.min(width, bounds.right + 1 + settings.padding),
+        top: Math.max(0, run.start - settings.padding),
+        bottom: Math.min(height, run.end + settings.padding),
+      };
+
+      const blob = await cropToBlob(bitmap, rect);
       panels.push({
-        top: bounds.top,
-        height: bounds.bottom - bounds.top,
-        width: bounds.right - bounds.left,
+        top: rect.top,
+        height: rect.bottom - rect.top,
+        width: rect.right - rect.left,
         blob,
         objectUrl: URL.createObjectURL(blob),
       });
     }
 
-    return { panels, detected, sourceWidth: width, sourceHeight: height, warnings };
+    if (partialCount > 0) {
+      warnings.push(
+        `下端で切れているグラフを ${partialCount}件 除外しました（次の撮影で完全な形を取り込みます）。`,
+      );
+    }
+
+    return {
+      panels,
+      detected: panels.length > 0,
+      partialCount,
+      sourceWidth: width,
+      sourceHeight: height,
+      warnings,
+    };
   } finally {
     bitmap.close();
   }
