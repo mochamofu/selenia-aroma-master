@@ -172,12 +172,4 @@ export type BrainwaveScreenshot = {
   trialNo: number;
   /** その回に試した内容。「ベース候補② Woody Restore」「＋ベルガモット1滴」など。 */
   trialLabel: string;
-  /**
-   * このグラフの代表値（0〜100）。
-   *
-   * リラックス度も集中度も、高いほどその状態が強い。ふつうは一方が上がると
-   * もう一方が下がるが、香りが合っているときは両方が高く出ることがある。
-   * 測定画面の数値を控えるか、CSVから取り込んで入れる。未入力なら null。
-   */
-  score: number | null;
 };

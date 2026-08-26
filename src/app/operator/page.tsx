@@ -32,7 +32,6 @@ import {
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
 import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
-import { BrainwaveTrendChart, toTrendPoints } from "@/components/BrainwaveTrendChart";
 import {
   loadRecipes,
   saveRecipes,
@@ -564,8 +563,6 @@ function makePair(options: {
   measuredAt: string;
   uploadedAt: string;
   scope: ScreenshotScope;
-  relaxScore: number;
-  focusScore: number;
 }): BrainwaveScreenshot[] {
   const base = {
     customerId: options.customerId,
@@ -586,7 +583,6 @@ function makePair(options: {
       src: `/demo/brainwave/relax-${options.variant}.png`,
       channels: ["relax"],
       contentHash: `sample-${options.idPrefix}-relax`,
-      score: options.relaxScore,
     },
     {
       ...base,
@@ -595,7 +591,6 @@ function makePair(options: {
       src: `/demo/brainwave/focus-${options.variant}.png`,
       channels: ["focus"],
       contentHash: `sample-${options.idPrefix}-focus`,
-      score: options.focusScore,
     },
   ];
 }
@@ -611,8 +606,6 @@ const decidedScreenshots: BrainwaveScreenshot[] = operatorAromas.flatMap((record
     measuredAt: `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`,
     uploadedAt: record.made_at,
     scope: "decided",
-    relaxScore: 58 + ((index * 7) % 25),
-    focusScore: 46 + ((index * 11) % 22),
   }),
 );
 
@@ -635,8 +628,6 @@ const pastDecidedScreenshots: BrainwaveScreenshot[] = clientsWithoutRecords.flat
       measuredAt: `${client.lastVisitAt} 15:${String((index * 13) % 60).padStart(2, "0")}`,
       uploadedAt: client.lastVisitAt,
       scope: "decided",
-      relaxScore: 55 + ((index * 9) % 28),
-      focusScore: 44 + ((index * 13) % 24),
     }),
 );
 
@@ -683,9 +674,6 @@ const trialScreenshots: BrainwaveScreenshot[] = operatorCustomers.flatMap((custo
       measuredAt: `${todaySessionDate} ${String(13 + Math.floor(index / 3)).padStart(2, "0")}:${String((index * 11) % 60).padStart(2, "0")}`,
       uploadedAt: todaySessionDate,
       scope: "trial",
-      // 通常は一方が上がると他方が下がる。5回目だけ両方が高い「ゾーン」の例。
-      relaxScore: index === 4 ? 81 : 42 + index * 6,
-      focusScore: index === 4 ? 78 : 74 - index * 5,
     }),
   ),
 );
@@ -1071,13 +1059,6 @@ export default function OperatorKartePage() {
     };
     saveRecipes([recipe, ...loadRecipes()]);
     setToast(`「${recipe.name}」をアロマレシピに保存しました。`);
-  }
-
-  /** 測定画面の数値を控える。推移グラフはここに入れた値で描く。 */
-  function updateScore(imageId: string, score: number | null) {
-    setBrainwaveScreenshots((current) =>
-      current.map((shot) => (shot.id === imageId ? { ...shot, score } : shot)),
-    );
   }
 
   /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
@@ -1544,17 +1525,6 @@ export default function OperatorKartePage() {
                       </button>
                     </p>
                   ) : null}
-                  <div className="mt-4 rounded-lg border border-[#e4dff0] bg-[#faf8fe] p-3">
-                    <h3 className="text-sm font-bold text-[#342a49]">この日の推移</h3>
-                    <p className="mt-1 text-xs leading-5 text-[#827690]">
-                      各回の数値を入れると、リラックス度と集中度の動きが1枚で見えます。
-                      どちらも0〜100で、高いほどその状態が強く出ています。
-                    </p>
-                    <div className="mt-3">
-                      <BrainwaveTrendChart points={toTrendPoints(trialRows)} />
-                    </div>
-                  </div>
-
                   <div className="mt-4">
                     <BrainwaveTrialGrid
                       rows={trialRows}
@@ -1563,7 +1533,6 @@ export default function OperatorKartePage() {
                       onExpand={expandBrainwaveImage}
                       onRelabel={relabelTrial}
                       onSwap={swapTrialChannels}
-                      onScoreChange={updateScore}
                       emptyMessage="本日の測定はまだありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、1枚につき1回の測定として、リラックス度と集中度に切り分けて並びます。"
                     />
                   </div>

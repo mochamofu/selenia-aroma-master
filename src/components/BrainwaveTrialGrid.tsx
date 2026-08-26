@@ -56,14 +56,12 @@ function Cell({
   active,
   onSelect,
   onExpand,
-  onScoreChange,
 }: {
   image: BrainwaveScreenshot | null;
   kind: "relax" | "focus";
   active: boolean;
   onSelect: (id: string) => void;
   onExpand: (id: string) => void;
-  onScoreChange?: (id: string, score: number | null) => void;
 }) {
   const tone = kind === "relax" ? "#5ab4e8" : "#e08a3c";
   const label = kind === "relax" ? "リラックス度" : "集中度";
@@ -78,52 +76,21 @@ function Cell({
   }
 
   return (
-    <div
-      className={`overflow-hidden rounded-lg border transition ${
-        active ? "border-[#8d6fd1] shadow-md shadow-[#8d6fd1]/12" : "border-[#e4dff0]"
+    <button
+      type="button"
+      onClick={() => onSelect(image.id)}
+      onDoubleClick={() => onExpand(image.id)}
+      title="ダブルクリックで拡大"
+      className={`overflow-hidden rounded-lg border text-left transition ${
+        active ? "border-[#8d6fd1] shadow-md shadow-[#8d6fd1]/12" : "border-[#e4dff0] hover:border-[#b7a5dd]"
       }`}
     >
-      <button
-        type="button"
-        onClick={() => onSelect(image.id)}
-        onDoubleClick={() => onExpand(image.id)}
-        title="ダブルクリックで拡大"
-        className="block w-full text-left"
-      >
-        <img src={image.src} alt={`${image.trialLabel} の${label}`} className="w-full object-cover" />
-      </button>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-        <span className="flex items-center gap-1.5 text-xs font-bold text-[#3b3152]">
-          <span className="h-2 w-2 rounded-full" style={{ background: tone }} />
-          {label}
-        </span>
-        {onScoreChange ? (
-          <label className="flex items-center gap-1.5 text-xs text-[#827690]">
-            <span className="sr-only">{label}の数値</span>
-            <input
-              value={image.score ?? ""}
-              onChange={(event) => {
-                const raw = event.target.value.trim();
-                if (raw === "") {
-                  onScoreChange(image.id, null);
-                  return;
-                }
-                const parsed = Number(raw);
-                if (!Number.isFinite(parsed)) return;
-                onScoreChange(image.id, Math.min(100, Math.max(0, parsed)));
-              }}
-              inputMode="numeric"
-              placeholder="--"
-              aria-label={`${image.trialLabel} の${label}の数値`}
-              className="h-8 w-14 rounded-lg border border-[#e4dff0] px-2 text-center text-sm font-bold text-[#3b3152] outline-none focus:border-[#8d6fd1]"
-            />
-            <span>/100</span>
-          </label>
-        ) : image.score !== null ? (
-          <span className="text-xs font-bold text-[#3b3152]">{image.score} /100</span>
-        ) : null}
-      </div>
-    </div>
+      <img src={image.src} alt={`${image.trialLabel} の${label}`} className="w-full object-cover" />
+      <span className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#3b3152]">
+        <span className="h-2 w-2 rounded-full" style={{ background: tone }} />
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -134,14 +101,12 @@ export function BrainwaveTrialGrid({
   onExpand,
   onRelabel,
   onSwap,
-  onScoreChange,
   emptyMessage,
 }: {
   rows: TrialRow[];
   activeImageId: string;
   onSelect: (id: string) => void;
   onExpand: (id: string) => void;
-  onScoreChange?: (id: string, score: number | null) => void;
   onRelabel?: (trialNo: number, label: string) => void;
   onSwap?: (trialNo: number) => void;
   emptyMessage: string;
@@ -194,7 +159,6 @@ export function BrainwaveTrialGrid({
               active={row.relax?.id === activeImageId}
               onSelect={onSelect}
               onExpand={onExpand}
-              onScoreChange={onScoreChange}
             />
             <Cell
               image={row.focus}
@@ -202,7 +166,6 @@ export function BrainwaveTrialGrid({
               active={row.focus?.id === activeImageId}
               onSelect={onSelect}
               onExpand={onExpand}
-              onScoreChange={onScoreChange}
             />
           </div>
         </section>
