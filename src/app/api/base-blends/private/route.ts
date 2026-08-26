@@ -12,8 +12,8 @@ import {
  * `base_blend_private_recipes` の RLS（管理者のみ）に判定を委ねる。
  * このサーバー側にサービスロールキーは置かないので、RLS を迂回する経路は存在しない。
  *
- * デモモード時: Supabase 未設定かつ NEXT_PUBLIC_ENABLE_DEMO_MODE=true のときだけ、
- * デモ用のダミー比率を返す。本番環境ではデモモードを無効にすること。
+ * デモモード時: NEXT_PUBLIC_ENABLE_DEMO_MODE=true のときはデモ用の比率を返し、
+ * Supabase へは問い合わせない。本番環境ではデモモードを無効にすること。
  */
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,8 @@ function unauthorized(message: string) {
 }
 
 export async function GET(request: Request) {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  // デモモードは Supabase より優先する（クライアント側の supabaseClient と同じ方針）。
+  if (isDemoModeEnabled || !supabaseUrl || !supabaseAnonKey) {
     if (!isDemoModeEnabled) {
       return NextResponse.json(
         { error: "Supabaseが未設定です。管理者に確認してください。" },
