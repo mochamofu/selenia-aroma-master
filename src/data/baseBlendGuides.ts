@@ -3,7 +3,7 @@ import type { BrainwaveChannel } from "@/types/brainwave";
 /**
  * ベースブレンド図鑑の解説データ。
  *
- * `public` … 顧客・未ログインにも表示してよい内容
+ * `public` … 利用者・未ログインにも表示してよい内容
  * `instructor` … 認定インストラクターにのみ表示する内容（使い分け指針・注意事項）
  *
  * 内部配合比率はここには置かない（`src/server/baseBlendPrivateRecipes.ts` を参照）。
@@ -26,7 +26,7 @@ export type BaseBlendPublicGuide = {
   recommendedFor: string[];
   scenes: string[];
   timeOfDay: string;
-  /** 脳波測定の傾向とブレンド選択のつながり。顧客にも見せる粒度で書く。 */
+  /** 脳波測定の傾向とブレンド選択のつながり。利用者にも見せる粒度で書く。 */
   brainwaveContext: string;
 };
 

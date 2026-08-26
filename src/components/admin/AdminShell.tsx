@@ -92,7 +92,7 @@ export function AdminShell({
   const { role } = useViewerRole();
 
   const activeItem = findActiveNavItem(pathname);
-  const heading = title ?? activeItem?.label ?? "顧客カルテ";
+  const heading = title ?? activeItem?.label ?? "利用者カルテ";
   const description = subtitle ?? activeItem?.description ?? "";
   const disclosureLabel = DISCLOSURE_LABELS[disclosureLevelForRole(role)];
 

@@ -10,7 +10,7 @@ import { ImageUploader } from "@/components/ImageUploader";
 import { demoBaseBlends, demoCustomers } from "@/data/mockData";
 import { createAromaRecord } from "@/services/aromaRecordsService";
 import { useAromaRecord } from "@/hooks/useAromaRecords";
-import { useAuth } from "@/hooks/useAuth";
+import { useViewerRole } from "@/hooks/useViewerRole";
 import type { AromaIngredient } from "@/types/aroma";
 
 const inputClass = "h-12 w-full rounded-2xl border border-[#e4d8c7] bg-[#faf7f1] px-4 text-sm outline-none transition focus:border-[#9b82c8]";
@@ -18,8 +18,9 @@ const textareaClass = "min-h-28 w-full rounded-2xl border border-[#e4d8c7] bg-[#
 
 export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: string }) {
   const router = useRouter();
-  const { session } = useAuth();
-  const { record } = useAromaRecord(aromaId ?? "", session?.userId, true);
+  // 他の管理画面と同じく、ここではログインを必須にしない（/operator と挙動を揃える）
+  useViewerRole();
+  const { record } = useAromaRecord(aromaId ?? "", undefined, true);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [ingredients, setIngredients] = useState<AromaIngredient[]>([
@@ -72,7 +73,7 @@ export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: s
         {toast ? <div className="rounded-2xl bg-[#eef4e9] p-3 text-sm font-bold text-[#5e7d56]">{toast}</div> : null}
         {error ? <div className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div> : null}
         <FormSection title="基本情報">
-          <select name="user_id" defaultValue={record?.user_id ?? "user-yuka"} className={inputClass} aria-label="顧客選択">
+          <select name="user_id" defaultValue={record?.user_id ?? "user-yuka"} className={inputClass} aria-label="利用者選択">
             {demoCustomers.filter((profile) => profile.role === "customer").map((profile) => <option key={profile.user_id} value={profile.user_id}>{profile.name}</option>)}
           </select>
           <input name="title" defaultValue={record?.title} className={inputClass} placeholder="タイトル" />
@@ -92,7 +93,7 @@ export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: s
             ))}
           </select>
           <input name="base_blend_volume_ml" type="number" step="0.1" defaultValue={record?.base_blend_volume_ml ?? 9} className={inputClass} placeholder="ベースブレンド使用量 ml" />
-          <p className="rounded-2xl bg-[#fff8ef] p-3 text-xs leading-5 text-stone-500">顧客画面では配合比率を表示せず、含まれる精油の種類だけを表示します。</p>
+          <p className="rounded-2xl bg-[#fff8ef] p-3 text-xs leading-5 text-stone-500">利用者画面では配合比率を表示せず、含まれる精油の種類だけを表示します。</p>
           <input name="brainwave_profile_id" defaultValue={record?.brainwave_profile_id ?? ""} className={inputClass} placeholder="脳波データ連携ID 例: EEG-RELAX-0508" />
         </FormSection>
         <FormSection title="商品画像">

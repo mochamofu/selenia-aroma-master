@@ -26,14 +26,14 @@ export const adminNavItems: AdminNavItem[] = [
   },
   {
     href: "/operator",
-    label: "顧客カルテ",
+    label: "利用者カルテ",
     icon: "ClipboardList",
     description: "1人の利用者の測定・制作・レポートをまとめて見る",
     status: "ready",
   },
   {
     href: "/operator/customers",
-    label: "顧客一覧",
+    label: "利用者一覧",
     icon: "Users",
     description: "登録済みの利用者を検索・絞り込みする",
     status: "ready",
@@ -84,8 +84,8 @@ export const adminNavItems: AdminNavItem[] = [
     href: "/operator/settings",
     label: "設定",
     icon: "Settings",
-    description: "表示範囲・アカウント・データ連携",
-    status: "preparing",
+    description: "サロン情報・測定の既定値・表示範囲",
+    status: "ready",
   },
 ];
 

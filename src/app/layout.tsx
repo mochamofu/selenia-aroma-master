@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  // iOS Safari が電話番号・日付を勝手にリンク化するのを防ぐ（顧客IDやロット番号の誤変換対策）。
+  // iOS Safari が電話番号・日付を勝手にリンク化するのを防ぐ（利用者IDやロット番号の誤変換対策）。
   formatDetection: { telephone: false, date: false, address: false },
   other: {
     // Next.js 16 は標準名の mobile-web-app-capable しか出力しない。

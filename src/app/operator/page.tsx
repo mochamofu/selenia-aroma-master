@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -38,6 +38,19 @@ import type { BrainwaveScreenshot, BrainwaveSession } from "@/types/brainwave";
 import { essentialOils } from "@/data/essentialOils";
 import type { AromaRecord, BaseBlend, EssentialOil } from "@/types/aroma";
 import type { Profile } from "@/types/profile";
+
+/**
+ * `location.search` を React の外部ストアとして読む。
+ * popstate を購読しておくと、ブラウザの戻る・進むでも選択中の利用者が追従する。
+ */
+function subscribeToLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
+
+function readLocationSearch() {
+  return window.location.search;
+}
 
 type KarteTab = "summary" | "measurements" | "blends" | "report" | "memo";
 
@@ -188,8 +201,8 @@ const emptyEssentialOilForm: EssentialOilForm = {
   safetyNote: "",
 };
 
-// カルテの顧客リストは operatorClients から作る。
-// 顧客一覧ページと別々に持つと人数がずれるため、出典を1つに揃えている。
+// カルテの利用者リストは operatorClients から作る。
+// 利用者一覧ページと別々に持つと人数がずれるため、出典を1つに揃えている。
 const operatorCustomers: Profile[] = operatorClients.map((client) =>
   customer(
     client.id,
@@ -517,14 +530,18 @@ const moodFilters = [
   { slug: "refresh", label: "リフレッシュ" },
 ];
 
-const initialImages: BrainwaveImage[] = operatorAromas.map((record, index) => ({
+// 取り込んだグラフと同じ入れ物に、デモ用のサンプル波形を入れておく。
+// 別々の状態にしていたため、スクショを取り込んでもサンプルが残り続けていた。
+const initialScreenshots: BrainwaveScreenshot[] = operatorAromas.map((record, index) => ({
   id: record.brainwave_image_id,
   customerId: record.user_id,
   title: `${record.title} / 1分測定`,
-  measurementLabel: "1分測定",
+  src: createWaveSvg(record.title.replace(/\s*\d+mL/i, ""), waveColor(index, "primary"), waveColor(index, "secondary"), 7 + index * 6),
+  channels: [],
+  detectionReason: "デモ用のサンプル波形",
+  contentHash: `sample-${record.brainwave_image_id}`,
   measuredAt: `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`,
   uploadedAt: record.made_at,
-  src: createWaveSvg(record.title.replace(/\s*\d+mL/i, ""), waveColor(index, "primary"), waveColor(index, "secondary"), 7 + index * 6),
   note: `${record.title} に紐づく脳波画像。${record.maker_note}`,
   source: "sample",
 }));
@@ -558,13 +575,26 @@ export default function OperatorKartePage() {
   const allEssentialOils = useMemo(() => [...essentialOils, ...customEssentialOils], [customEssentialOils]);
   const [karteTab, setKarteTab] = useState<KarteTab>("measurements");
   // 問診中は画面に他の利用者の氏名が出ないよう、初期状態では誰も選択しない。
-  // 「顧客を呼び出す」を押したときだけ一覧（ClientPicker）を開く。
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // 「利用者を選ぶ」を押したときだけ一覧（ClientPicker）を開く。
+  const [manualCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
-  const [brainwaveImages, setBrainwaveImages] = useState<BrainwaveImage[]>(initialImages);
-  const [selectedImageId, setSelectedImageId] = useState(operatorAromas[0]?.brainwave_image_id ?? initialImages[0]?.id ?? "");
-  const [newImageTitle, setNewImageTitle] = useState("1分測定グラフ");
-  const [newImageNote, setNewImageNote] = useState("");
+
+  // 利用者一覧から /operator?client=... で来たときは、その人をそのまま開く。
+  // ここで拾わないと、一覧で選んだのにもう一度選び直す二度手間になる。
+  // URL はレンダー中に読めない外部の値なので useSyncExternalStore で取り込む。
+  // サーバー側は空文字を返し、ハイドレーション後に実際のクエリで再描画される。
+  const searchString = useSyncExternalStore(subscribeToLocation, readLocationSearch, () => "");
+  const customerIdFromUrl = useMemo(() => {
+    const requested = new URLSearchParams(searchString).get("client");
+    if (!requested) return "";
+    const target = operatorClients.find(
+      (client) => client.id === requested || client.userId === requested,
+    );
+    return target?.userId ?? "";
+  }, [searchString]);
+  // 画面で選び直したらそちらが優先。まだ触っていなければ URL の指定を使う。
+  const selectedCustomerId = manualCustomerId ?? customerIdFromUrl;
+  const [selectedImageId, setSelectedImageId] = useState(operatorAromas[0]?.brainwave_image_id ?? "");
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedBaseId, setSelectedBaseId] = useState(initialOperatorRecord?.base_blend_id ?? "base-02");
   const [addedOils, setAddedOils] = useState<AddedOil[]>(defaultAddedOils);
@@ -588,14 +618,15 @@ export default function OperatorKartePage() {
   const baseSecretsUnlocked = canSeeInternalRatios && showInternalRatios && !privateRecipesError;
   const allBaseNotes = useMemo(() => ({ ...privateRecipes, ...customBaseNotes }), [privateRecipes, customBaseNotes]);
   const [brainwaveSessions, setBrainwaveSessions] = useState<BrainwaveSession[]>([]);
-  const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>([]);
+  const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>(initialScreenshots);
   const [toast, setToast] = useState("");
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? null;
-  // 業務用の顧客情報（顧客番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
+  // 業務用の利用者情報（利用者番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
   const selectedClient = operatorClients.find((client) => client.userId === selectedCustomerId) ?? null;
   const selectedClientAge = selectedClient ? calculateClientAge(selectedClient.birthday) : null;
-  const customerImages = brainwaveImages.filter((image) => image.customerId === selectedCustomerId);
+  // 脳波画像とスクショ取り込みは同じ入れ物を見る。取り込むと即座にここへ反映される。
+  const customerImages = brainwaveScreenshots.filter((image) => image.customerId === selectedCustomerId);
   const activeImage = customerImages.find((image) => image.id === selectedImageId) ?? customerImages[0];
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
   const selectedBaseNote = allBaseNotes[selectedBase.id];
@@ -644,7 +675,7 @@ export default function OperatorKartePage() {
       selectDraftHistory(firstDraft);
       return;
     }
-    const firstImage = brainwaveImages.find((image) => image.customerId === customerId);
+    const firstImage = brainwaveScreenshots.find((image) => image.customerId === customerId);
     setSelectedImageId(firstImage?.id ?? "");
     setSelectedHistory(null);
   }
@@ -681,45 +712,14 @@ export default function OperatorKartePage() {
     }
   }
 
-  function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      setToast("画像は10MB以下でアップロードしてください。");
-      event.target.value = "";
-      return;
-    }
-
-    const imageTitle = newImageTitle.trim() || file.name.replace(/\.[^.]+$/, "");
-    const uploadedImage: BrainwaveImage = {
-      id: nextLocalId("upload"),
-      customerId: selectedCustomerId,
-      title: imageTitle,
-      measurementLabel: "1分測定",
-      measuredAt: formatDateTime(new Date()),
-      uploadedAt: formatDate(new Date()),
-      src: URL.createObjectURL(file),
-      note: newImageNote.trim() || "アップロードされた脳波グラフ画像。",
-      source: "upload",
-    };
-
-    setBrainwaveImages((images) => [uploadedImage, ...images]);
-    setSelectedImageId(uploadedImage.id);
-    setNewImageTitle("1分測定グラフ");
-    setNewImageNote("");
-    setToast("脳波画像をカルテに追加しました。");
-    event.target.value = "";
-  }
-
   function renameActiveImage(title: string) {
     if (!activeImage) return;
-    setBrainwaveImages((images) => images.map((image) => (image.id === activeImage.id ? { ...image, title } : image)));
+    setBrainwaveScreenshots((images) => images.map((image) => (image.id === activeImage.id ? { ...image, title } : image)));
   }
 
   function updateActiveImageNote(note: string) {
     if (!activeImage) return;
-    setBrainwaveImages((images) => images.map((image) => (image.id === activeImage.id ? { ...image, note } : image)));
+    setBrainwaveScreenshots((images) => images.map((image) => (image.id === activeImage.id ? { ...image, note } : image)));
   }
 
   function updateOil(rowId: string, patch: Partial<AddedOil>) {
@@ -769,19 +769,19 @@ export default function OperatorKartePage() {
     };
     setSavedDrafts((drafts) => [draft, ...drafts]);
     setSelectedHistory({ kind: "draft", id: draft.id });
-    setToast(`${selectedCustomer?.name ?? "顧客"}の香り制作記録を保存しました。`);
+    setToast(`${selectedCustomer?.name ?? "利用者"}の香り制作記録を保存しました。`);
   }
 
   function addCustomerKarte() {
     const name = customerForm.name.trim();
     if (!name) {
-      setToast("顧客名を入力してください。");
+      setToast("利用者名を入力してください。");
       return;
     }
 
     const userId = customerForm.userId.trim() || `user-${nextLocalId("karte")}`;
     if (customers.some((customer) => customer.user_id === userId)) {
-      setToast("同じ顧客IDがすでにあります。別のIDを指定してください。");
+      setToast("同じ利用者IDがすでにあります。別のIDを指定してください。");
       return;
     }
 
@@ -884,7 +884,7 @@ export default function OperatorKartePage() {
 
   return (
     <AdminShell
-      title="顧客カルテ"
+      title="利用者カルテ"
       subtitle="測定・制作・レポートを1人分まとめて扱います"
       actions={
         <button
@@ -902,7 +902,7 @@ export default function OperatorKartePage() {
           <section className="border-b border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 lg:px-6">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="text-xl font-bold text-[var(--admin-text)]">
-                {selectedClient?.name ?? selectedCustomer?.name ?? "顧客未選択"}
+                {selectedClient?.name ?? selectedCustomer?.name ?? "利用者未選択"}
               </h2>
               <button
                 type="button"
@@ -910,7 +910,7 @@ export default function OperatorKartePage() {
                 className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--admin-border)] px-2.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:border-[var(--admin-primary)] hover:text-[var(--admin-primary-strong)]"
               >
                 <Search className="h-3.5 w-3.5" />
-                {selectedCustomer ? "顧客を切り替える" : "顧客を呼び出す"}
+                {selectedCustomer ? "利用者を切り替える" : "利用者を選ぶ"}
               </button>
               {selectedCustomer ? (
                 <button
@@ -983,7 +983,7 @@ export default function OperatorKartePage() {
                 <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#f3effb] text-[#8d6fd1]">
                   <Users className="h-6 w-6" />
                 </span>
-                <h2 className="mt-4 text-lg font-bold text-[#3b3152]">顧客を呼び出してください</h2>
+                <h2 className="mt-4 text-lg font-bold text-[#3b3152]">氏名を入力してください</h2>
                 <p className="mt-2 text-sm leading-6 text-[#7b7088]">
                   問診中に他の利用者の氏名が画面に出ないよう、カルテは呼び出すまで表示しません。
                 </p>
@@ -993,7 +993,7 @@ export default function OperatorKartePage() {
                   className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-[#8d6fd1] px-5 text-sm font-bold text-white transition hover:bg-[#755bb4]"
                 >
                   <Search className="h-4 w-4" />
-                  顧客を呼び出す
+                  利用者を選ぶ
                 </button>
               </div>
             </section>
@@ -1003,20 +1003,16 @@ export default function OperatorKartePage() {
                 {karteTab === "measurements" ? (
                   <>
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />脳波画像</h2>
-                      <p className="mt-1 text-xs text-[#827690]">画像ごとにタイトルを付け、選択すると右側で大きく確認できます。</p>
-                    </div>
-                    <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#d98aa8] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#c87598]">
-                      <Upload className="h-4 w-4" />
-                      画像アップロード
-                      <input className="sr-only" type="file" accept="image/*" onChange={handleImageUpload} />
-                    </label>
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />脳波画像</h2>
+                    <p className="mt-1 text-xs text-[#827690]">取り込んだグラフがここに並びます。選択すると右側で大きく確認できます。</p>
                   </div>
-                  <p className="mt-2 text-xs font-bold text-[#8a6a35]">画像上限: 10MB / アップロード後も右側の画像タイトルから変更できます。</p>
-                  <div className="mt-4 grid gap-3 2xl:grid-cols-[minmax(0,1fr)_260px]">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {customerImages.length === 0 ? (
+                    <p className="mt-4 rounded-lg border border-dashed border-[#ddd6ea] bg-[#faf8fe] p-6 text-center text-xs leading-5 text-[#827690]">
+                      まだ脳波画像がありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、グラフが自動で切り出されてここに並びます。
+                    </p>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                       {customerImages.map((image) => (
                         <button
                           key={image.id}
@@ -1032,22 +1028,7 @@ export default function OperatorKartePage() {
                         </button>
                       ))}
                     </div>
-                    <div className="rounded-lg border border-[#e4dff0] bg-[#f8f5fd] p-3">
-                      <p className="text-xs font-bold text-[#665a78]">アップロード時のタイトル</p>
-                      <input
-                        value={newImageTitle}
-                        onChange={(event) => setNewImageTitle(event.target.value)}
-                        className="mt-2 h-10 w-full rounded-lg border border-[#ddd6ea] bg-white px-3 text-sm outline-none focus:border-[#8d6fd1]"
-                        placeholder="例: 1分測定 / 睡眠前"
-                      />
-                      <textarea
-                        value={newImageNote}
-                        onChange={(event) => setNewImageNote(event.target.value)}
-                        className="mt-2 min-h-24 w-full rounded-lg border border-[#ddd6ea] bg-white px-3 py-2 text-sm outline-none focus:border-[#8d6fd1]"
-                        placeholder="画像メモ、測定条件、香り制作時の判断材料"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </section>
 
                 <BrainwaveIntakePanel
@@ -1320,7 +1301,7 @@ export default function OperatorKartePage() {
 
       {creationPanel === "customer" ? (
         <ModalShell
-          title="顧客カルテ追加"
+          title="利用者カルテ追加"
           subtitle="新しい利用者カルテを作成します。正式DB保存前のデモでは、この画面内だけに反映されます。"
           onClose={() => setCreationPanel(null)}
         >
@@ -1328,7 +1309,7 @@ export default function OperatorKartePage() {
             <Field label="氏名">
               <input value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} className="field-input" placeholder="例: 山田 太郎" />
             </Field>
-            <Field label="顧客ID">
+            <Field label="利用者ID">
               <input value={customerForm.userId} onChange={(event) => setCustomerForm((form) => ({ ...form, userId: event.target.value }))} className="field-input" placeholder="空欄なら自動採番" />
             </Field>
             <Field label="好みカテゴリ">
@@ -1470,30 +1451,33 @@ function ClientPicker({
   if (!open) return null;
 
   const q = query.trim().toLowerCase();
+  // 個人情報保護の観点から、開いた時点では一覧を出さない。
+  // 利用者が画面を見ている場面で他の人の氏名が並ぶのを避けるため、
+  // 氏名を入力して該当した人だけを表示する。
   const filtered = q
     ? customers.filter((customer) =>
         `${customer.name} ${customer.user_id}`.toLowerCase().includes(q),
       )
-    : customers;
+    : [];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
-        aria-label="顧客の呼び出しを閉じる"
+        aria-label="利用者の選択を閉じる"
         onClick={onClose}
         className="absolute inset-0 bg-[#2b2340]/45"
       />
       <div
         role="dialog"
-        aria-label="顧客を呼び出す"
+        aria-label="利用者を選ぶ"
         className="safe-top relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
       >
         <div className="border-b border-[#e4dff0] px-5 py-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-base font-bold text-[#3b3152]">
               <Users className="h-4 w-4 text-[#8d6fd1]" />
-              顧客を呼び出す
+              利用者を選ぶ
             </h2>
             <button
               type="button"
@@ -1510,7 +1494,7 @@ function ClientPicker({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="氏名・顧客IDで検索"
+              placeholder="氏名・利用者IDで検索"
               autoFocus
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
@@ -1522,14 +1506,20 @@ function ClientPicker({
           </div>
 
           <p className="mt-2 text-xs text-[#827690]">
-            {q ? `${filtered.length}名が一致` : `登録 ${customers.length}名`}
+            {q ? `${filtered.length}名が一致しました` : "氏名の一部を入力すると候補が出ます"}
           </p>
         </div>
 
         <div className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
-          {filtered.length === 0 ? (
+          {!q ? (
+            <p className="rounded-lg border border-dashed border-[#ddd6ea] p-8 text-center text-sm leading-6 text-[#827690]">
+              氏名を入力してください。
+              <br />
+              入力するまで一覧は表示しません。
+            </p>
+          ) : filtered.length === 0 ? (
             <p className="rounded-lg border border-dashed border-[#ddd6ea] p-8 text-center text-sm text-[#827690]">
-              該当する顧客がいません。
+              該当する方がいません。
             </p>
           ) : (
             filtered.map((customer) => {
