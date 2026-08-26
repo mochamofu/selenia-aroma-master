@@ -3,6 +3,29 @@
 :root {
   --background: #faf7f1;
   --foreground: #322b25;
+
+  /*
+   * 管理者・施術者向けアプリのブランドカラー（薄紫）。
+   * 以前のモックは緑基調だったが、セレニアのブランドに合わせて紫系に統一する。
+   * 画面側は直値ではなくこのトークンを使う。
+   */
+  --admin-primary: #8d6fd1;
+  --admin-primary-strong: #6f55ab;
+  --admin-primary-soft: #efe8fb;
+  --admin-primary-softer: #f7f3fd;
+  --admin-accent: #d98aa8;
+  --admin-surface: #ffffff;
+  --admin-canvas: #f6f3fc;
+  --admin-sidebar: #f3eefb;
+  --admin-border: #e4dcf3;
+  --admin-text: #3b3152;
+  --admin-text-muted: #7b7089;
+  --admin-warning: #8a6a35;
+  --admin-warning-soft: #fdf3e3;
+  --admin-danger: #a8506e;
+  --admin-danger-soft: #fdeaef;
+  --admin-success: #5e7d56;
+  --admin-success-soft: #eef4e9;
 }
 
 @theme inline {
@@ -18,10 +41,17 @@
 
 html {
   background: #eee7dc;
+  /* iOS のスクロール終端バウンドで背景がめくれるのを防ぐ */
+  overscroll-behavior-y: none;
+  /* iPhone 横向きで Safari が本文を勝手に拡大するのを止める */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
+  /* iOS Safari はアドレスバーの伸縮で 100vh がずれるため dvh を使う。
+     dvh 非対応ブラウザ向けに 100vh を先に置いてフォールバックさせる。 */
   min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at 10% 0%, rgba(196, 178, 224, 0.24), transparent 28rem),
     linear-gradient(180deg, #fbf8f2 0%, #f6efe6 100%);
@@ -58,6 +88,49 @@ textarea {
 
 textarea.field-input {
   height: auto;
+}
+
+/*
+ * セーフエリア（iPhoneのノッチ・ホームインジケーター、iPadの角丸）
+ *
+ * viewportFit: "cover" にしているため、そのままだと固定要素が
+ * ホームインジケーターに重なる。ユーティリティ側で余白を確保する。
+ */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* 下部固定ナビ用。ホームインジケーター分を既存の余白に足す。 */
+.nav-offset-bottom {
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* 下部固定ナビに隠れないよう、本文末尾に確保する余白。 */
+.nav-safe-padding {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * iOS Safari は font-size が 16px 未満の入力欄にフォーカスすると
+ * 自動でズームする。カルテの入力欄は 14px なのでズームが起きて
+ * レイアウトが崩れるため、タッチ端末に限り 16px へ引き上げる。
+ */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  .field-input {
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

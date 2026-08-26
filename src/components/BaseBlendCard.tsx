@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import type { BaseBlend } from "@/types/aroma";
 import { Icon } from "./Icon";
 
 export function BaseBlendCard({ blend }: { blend: BaseBlend }) {
+  const guide = getBaseBlendGuide(blend.id);
   return (
     <Link
       href={`/base-blends/${blend.id}`}
@@ -20,6 +22,11 @@ export function BaseBlendCard({ blend }: { blend: BaseBlend }) {
             </div>
             <Icon name="ChevronRight" className="h-5 w-5 shrink-0 text-stone-400" />
           </div>
+          {guide ? (
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-500">
+              {guide.public.scentImpression}
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-1.5">
             {blend.benefits.slice(0, 2).map((benefit) => (
               <span key={benefit} className="rounded-full bg-[#f4ead3] px-2.5 py-1 text-[11px] font-bold text-[#9f7a2f]">

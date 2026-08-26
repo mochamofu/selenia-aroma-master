@@ -1,4 +1,8 @@
-export type UserRole = "customer" | "admin";
+/**
+ * `instructor` は認定インストラクター。顧客より広い情報（使い分け指針・禁忌）を見られるが、
+ * 内部配合比率は見られない。開示範囲の判定は `@/lib/disclosure` を参照。
+ */
+export type UserRole = "customer" | "instructor" | "admin";
 
 export type Profile = {
   id: string;

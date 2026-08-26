@@ -1,34 +1,32 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/components/Icon";
+import { Droplet } from "lucide-react";
 import { signInWithEmail } from "@/lib/auth";
-import { isCustomerOnlyApp } from "@/lib/appTarget";
 import { isDemoModeEnabled } from "@/lib/supabaseClient";
 
+/**
+ * 管理者・施術者向けアプリのログイン画面。
+ *
+ * ログイン後の遷移先は常に管理者アプリ（/operator/dashboard）。
+ * 以前はロールで /admin と /dashboard に振り分けていたが、
+ * 利用者向けアプリを別リポジトリへ分離したため分岐を廃止した。
+ */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState(isDemoModeEnabled ? "yuka@example.com" : "");
+  const [email, setEmail] = useState(isDemoModeEnabled ? "admin@example.com" : "");
   const [password, setPassword] = useState(isDemoModeEnabled ? "password" : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (isCustomerOnlyApp && isDemoModeEnabled) {
-      router.replace("/dashboard");
-    }
-  }, [router]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const result = await signInWithEmail(email, password);
-      const role = isCustomerOnlyApp ? "customer" : "role" in result ? result.role : email.includes("admin") ? "admin" : "customer";
-      router.replace(role === "admin" ? "/admin" : "/dashboard");
+      await signInWithEmail(email, password);
+      router.replace("/operator/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
@@ -37,30 +35,64 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-[430px] place-items-center bg-[#FAF7F1] px-6">
-      <form onSubmit={onSubmit} className="w-full rounded-[34px] bg-white/86 p-6 shadow-2xl shadow-stone-300/40 backdrop-blur">
+    <main className="grid min-h-screen place-items-center bg-[var(--admin-canvas)] px-6 py-10">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-8 shadow-xl shadow-[#2b2340]/8"
+      >
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-[24px] bg-gradient-to-br from-[#c6b0e6] to-[#d7c58e] text-white shadow-lg">
-            <Icon name="Sparkles" className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-bold text-stone-900">Selenia Aroma</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-500">制作記録と香りの記憶を、いつでも手元に。</p>
+          <span className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-[var(--admin-primary)] text-white">
+            <Droplet className="h-8 w-8" />
+          </span>
+          <h1 className="text-2xl font-bold text-[var(--admin-text)]">Selenia Aroma Karte</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--admin-text-muted)]">
+            脳波測定にもとづくアロマ制作の管理アプリ
+          </p>
         </div>
-        <label className="block text-sm font-bold text-stone-700">
-          メール
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="text" inputMode="email" autoComplete="email" className="mt-2 h-14 w-full rounded-2xl border border-[#e4d8c7] bg-[#faf7f1] px-4 text-base outline-none transition focus:border-[#9b82c8]" required />
+
+        <label className="block text-sm font-bold text-[var(--admin-text)]">
+          メールアドレス
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            inputMode="email"
+            autoComplete="email"
+            className="mt-2 h-12 w-full rounded-lg border border-[var(--admin-border)] px-4 text-base outline-none transition focus:border-[var(--admin-primary)]"
+            required
+          />
         </label>
-        <label className="mt-4 block text-sm font-bold text-stone-700">
+
+        <label className="mt-4 block text-sm font-bold text-[var(--admin-text)]">
           パスワード
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="mt-2 h-14 w-full rounded-2xl border border-[#e4d8c7] bg-[#faf7f1] px-4 text-base outline-none transition focus:border-[#9b82c8]" required />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            autoComplete="current-password"
+            className="mt-2 h-12 w-full rounded-lg border border-[var(--admin-border)] px-4 text-base outline-none transition focus:border-[var(--admin-primary)]"
+            required
+          />
         </label>
-        {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
-        <button disabled={loading} className="mt-6 h-14 w-full rounded-full bg-[#755aa8] text-base font-bold text-white shadow-lg shadow-[#755aa8]/25 transition hover:brightness-105 active:scale-95 disabled:opacity-60" type="submit" aria-label="ログイン">
+
+        {error ? (
+          <p className="mt-4 rounded-lg bg-[var(--admin-danger-soft)] p-3 text-sm font-bold text-[var(--admin-danger)]">
+            {error}
+          </p>
+        ) : null}
+
+        <button
+          disabled={loading}
+          type="submit"
+          className="mt-6 h-12 w-full rounded-lg bg-[var(--admin-primary)] text-base font-bold text-white transition hover:bg-[var(--admin-primary-strong)] disabled:opacity-60"
+        >
           {loading ? "ログイン中..." : "ログイン"}
         </button>
+
         {isDemoModeEnabled ? (
-          <p className="mt-4 text-center text-xs leading-5 text-stone-500">
-            {isCustomerOnlyApp ? "デモ: yuka@example.com / password" : "デモ: customer は yuka@example.com、admin は admin@example.com"}
+          <p className="mt-4 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-center text-xs leading-5 text-[var(--admin-text-muted)]">
+            デモモードです。メールに <strong>admin</strong> を含めると管理者、
+            それ以外は一般ロールとしてログインします。
           </p>
         ) : null}
       </form>

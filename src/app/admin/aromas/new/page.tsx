@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { AromaForm } from "@/components/AromaForm";
-
-export default function NewAromaPage() {
-  return <AromaForm mode="new" />;
+export default function AdminNewAromaRedirectPage() {
+  redirect("/operator/blend-records/new");
 }

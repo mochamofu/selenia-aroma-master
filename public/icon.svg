@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Selenia Aroma">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8d6fd1"/>
+      <stop offset="55%" stop-color="#b192d8"/>
+      <stop offset="100%" stop-color="#d7c58e"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1e6d4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="140" cy="112" r="132" fill="#ffffff" opacity="0.12"/>
+
+  <!-- 雫: アロマオイル -->
+  <path d="M256 82c70 90 106 148 106 194a106 106 0 0 1-212 0c0-46 36-104 106-194z" fill="url(#drop)"/>
+
+  <!-- 脳波: 雫の中を走る波形 -->
+  <path d="M170 288c16 0 20-38 34-38s18 58 34 58 20-44 34-44 18 38 32 38 18-20 28-20"
+        fill="none" stroke="#8d6fd1" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,15 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const customerOnlyBlockedPrefixes = ["/admin", "/operator"];
-
+/**
+ * このリポジトリは管理者・施術者向けアプリ専用になったため、
+ * 以前あった「顧客専用モードでは /admin と /operator を塞ぐ」処理は削除した。
+ *
+ * ミドルウェア自体は将来の共通処理（アクセスログ、メンテナンス表示など）の
+ * 差し込み口として残している。
+ */
 export function proxy(request: NextRequest) {
-  const appTarget = process.env.NEXT_PUBLIC_APP_TARGET ?? "all";
-  const { pathname } = request.nextUrl;
-
-  if (appTarget === "customer" && customerOnlyBlockedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
+  void request;
   return NextResponse.next();
 }
 

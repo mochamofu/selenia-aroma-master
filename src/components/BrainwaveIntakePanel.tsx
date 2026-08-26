@@ -1,0 +1,474 @@
+"use client";
+
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Activity, AlertTriangle, Check, ImageUp, Trash2, Upload } from "lucide-react";
+import { BrainwaveChart } from "@/components/BrainwaveChart";
+import { BrainwaveCsvError, parseBrainwaveCsv } from "@/lib/brainwaveCsv";
+import { findUncoveredChannels, intakeScreenshots } from "@/lib/screenshotIntake";
+import {
+  BRAINWAVE_CHANNELS,
+  BRAINWAVE_CHANNEL_META,
+  PUBLIC_BRAINWAVE_CHANNELS,
+  type BrainwaveChannel,
+  type BrainwaveScreenshot,
+  type BrainwaveSession,
+} from "@/types/brainwave";
+
+const MAX_CSV_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+type BrainwaveIntakePanelProps = {
+  customerId: string;
+  customerName: string;
+  sessions: BrainwaveSession[];
+  screenshots: BrainwaveScreenshot[];
+  onSessionsChange: (updater: (sessions: BrainwaveSession[]) => BrainwaveSession[]) => void;
+  onScreenshotsChange: (
+    updater: (screenshots: BrainwaveScreenshot[]) => BrainwaveScreenshot[],
+  ) => void;
+  onToast: (message: string) => void;
+};
+
+function formatSigned(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${rounded}`;
+}
+
+export function BrainwaveIntakePanel({
+  customerId,
+  customerName,
+  sessions,
+  screenshots,
+  onSessionsChange,
+  onScreenshotsChange,
+  onToast,
+}: BrainwaveIntakePanelProps) {
+  const idCounter = useRef(0);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [showInternalChannels, setShowInternalChannels] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
+  const [intakeSummary, setIntakeSummary] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const customerSessions = useMemo(
+    () => sessions.filter((session) => session.customerId === customerId),
+    [sessions, customerId],
+  );
+  const customerScreenshots = useMemo(
+    () => screenshots.filter((shot) => shot.customerId === customerId),
+    [screenshots, customerId],
+  );
+
+  const activeSession =
+    customerSessions.find((session) => session.id === selectedSessionId) ?? customerSessions[0] ?? null;
+
+  const uncoveredChannels = useMemo(
+    () => findUncoveredChannels(customerScreenshots.map((shot) => shot.channels)),
+    [customerScreenshots],
+  );
+
+  function nextId(prefix: string) {
+    idCounter.current += 1;
+    return `${prefix}-${Date.now()}-${idCounter.current}`;
+  }
+
+  async function handleCsvUpload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+
+    setBusy(true);
+    setCsvError(null);
+    setCsvWarnings([]);
+
+    const added: BrainwaveSession[] = [];
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      if (file.size > MAX_CSV_SIZE_BYTES) {
+        errors.push(`${file.name}: 5MBを超えています。`);
+        continue;
+      }
+      try {
+        const text = await file.text();
+        const parsed = parseBrainwaveCsv(text);
+        added.push({
+          id: nextId("eeg-session"),
+          customerId,
+          sourceFileName: file.name,
+          measuredAt: new Date(file.lastModified).toISOString().slice(0, 16).replace("T", " "),
+          timestampsSec: parsed.timestampsSec,
+          series: parsed.series,
+          missingChannels: parsed.missingChannels,
+          stats: parsed.stats,
+          durationSec: parsed.durationSec,
+          rawCsv: text,
+          note: "",
+        });
+        warnings.push(...parsed.warnings.map((warning) => `${file.name}: ${warning}`));
+      } catch (error) {
+        errors.push(
+          `${file.name}: ${
+            error instanceof BrainwaveCsvError || error instanceof Error
+              ? error.message
+              : "読み込みに失敗しました。"
+          }`,
+        );
+      }
+    }
+
+    if (added.length > 0) {
+      onSessionsChange((current) => [...added, ...current]);
+      setSelectedSessionId(added[0].id);
+      onToast(`${added.length}件のCSVをカルテに取り込みました。`);
+    }
+    setCsvWarnings(warnings);
+    setCsvError(errors.length ? errors.join("\n") : null);
+    setBusy(false);
+  }
+
+  async function handleScreenshotUpload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+
+    setBusy(true);
+
+    const oversized = files.filter((file) => file.size > MAX_IMAGE_SIZE_BYTES);
+    const usable = files.filter((file) => file.size <= MAX_IMAGE_SIZE_BYTES);
+
+    const existingHashes = screenshots
+      .filter((shot) => shot.customerId === customerId)
+      .map((shot) => shot.contentHash);
+
+    const result = await intakeScreenshots(usable, existingHashes);
+
+    const added: BrainwaveScreenshot[] = result.accepted.map(({ file, analysis }) => ({
+      id: nextId("eeg-shot"),
+      customerId,
+      title: file.name.replace(/\.[^.]+$/, ""),
+      src: URL.createObjectURL(file),
+      channels: analysis.guessedChannels,
+      detectionReason: analysis.detectionReason,
+      contentHash: analysis.contentHash,
+      measuredAt: new Date(file.lastModified).toISOString().slice(0, 16).replace("T", " "),
+      uploadedAt: new Date().toISOString().slice(0, 10),
+      note: "",
+      source: "upload",
+    }));
+
+    if (added.length > 0) {
+      onScreenshotsChange((current) => [...added, ...current]);
+    }
+
+    const parts = [`${added.length}枚を取り込みました`];
+    if (result.duplicates.length > 0) {
+      parts.push(`重複 ${result.duplicates.length}枚を自動で除外しました`);
+    }
+    if (oversized.length > 0) parts.push(`10MB超 ${oversized.length}枚をスキップ`);
+    if (result.failures.length > 0) parts.push(`解析失敗 ${result.failures.length}枚`);
+
+    setIntakeSummary(parts.join(" / "));
+    onToast(parts.join(" / "));
+    setBusy(false);
+  }
+
+  function toggleScreenshotChannel(shotId: string, channel: BrainwaveChannel) {
+    onScreenshotsChange((current) =>
+      current.map((shot) => {
+        if (shot.id !== shotId) return shot;
+        const has = shot.channels.includes(channel);
+        return {
+          ...shot,
+          channels: has
+            ? shot.channels.filter((item) => item !== channel)
+            : [...shot.channels, channel],
+          detectionReason: "操作者が手動で指定",
+        };
+      }),
+    );
+  }
+
+  function removeScreenshot(shotId: string) {
+    onScreenshotsChange((current) => current.filter((shot) => shot.id !== shotId));
+  }
+
+  function removeSession(sessionId: string) {
+    onSessionsChange((current) => current.filter((session) => session.id !== sessionId));
+    if (selectedSessionId === sessionId) setSelectedSessionId(null);
+  }
+
+  function downloadCsv(session: BrainwaveSession) {
+    const blob = new Blob([session.rawCsv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = session.sourceFileName || "brainwave.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const visibleChannels = showInternalChannels ? BRAINWAVE_CHANNELS : PUBLIC_BRAINWAVE_CHANNELS;
+
+  return (
+    <section className="space-y-4 rounded-lg border border-[#e4dff0] bg-white p-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]">
+            <Activity className="h-5 w-5 text-[#8d6fd1]" />
+            脳波データ取り込み
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-[#827690]">
+            {customerName} のカルテ。iPad から書き出した CSV と測定画面のスクリーンショットを
+            紐づけます。CSV には7波形すべてを保管し、利用者向け画面にはリラックス・集中のみ出します。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#8d6fd1] px-3 text-xs font-bold text-white transition hover:bg-[#7a5cc0]">
+            <Upload className="h-4 w-4" />
+            CSVを取り込む
+            <input
+              className="sr-only"
+              type="file"
+              accept=".csv,text/csv"
+              multiple
+              onChange={handleCsvUpload}
+              disabled={busy}
+            />
+          </label>
+          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#d98aa8] px-3 text-xs font-bold text-white transition hover:bg-[#c87598]">
+            <ImageUp className="h-4 w-4" />
+            スクショを一括取り込み
+            <input
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleScreenshotUpload}
+              disabled={busy}
+            />
+          </label>
+        </div>
+      </header>
+
+      {csvError ? (
+        <p className="whitespace-pre-line rounded-lg bg-[#fdeaef] p-3 text-xs font-bold text-[#a8506e]">
+          {csvError}
+        </p>
+      ) : null}
+
+      {csvWarnings.length > 0 ? (
+        <ul className="space-y-1 rounded-lg bg-[#fdf3e3] p-3 text-xs text-[#8a6a35]">
+          {csvWarnings.map((warning) => (
+            <li key={warning} className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{warning}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* ---- CSVセッション ---- */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-[#342a49]">測定セッション（CSV）</h3>
+          <label className="flex items-center gap-2 text-xs font-bold text-[#665a78]">
+            <input
+              type="checkbox"
+              checked={showInternalChannels}
+              onChange={(event) => setShowInternalChannels(event.target.checked)}
+              className="h-4 w-4 accent-[#8d6fd1]"
+            />
+            α/β/γ/δ/θ の内部波形も表示（管理者向け）
+          </label>
+        </div>
+
+        {customerSessions.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-[#ddd6ea] p-4 text-center text-xs text-[#827690]">
+            まだCSVがありません。FocusCalm から書き出したCSVを取り込むと、7波形すべてが保管され、
+            グラフがここに描画されます。
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {customerSessions.map((session) => (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => setSelectedSessionId(session.id)}
+                  className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                    activeSession?.id === session.id
+                      ? "border-[#8d6fd1] bg-[#f6f2fd] font-bold text-[#4b3d6b]"
+                      : "border-[#e4dff0] hover:border-[#b7a5dd]"
+                  }`}
+                >
+                  <span className="block max-w-52 truncate font-bold text-[#3b3152]">
+                    {session.sourceFileName}
+                  </span>
+                  <span className="text-[#827690]">
+                    {session.measuredAt} / {Math.round(session.durationSec)}秒 /{" "}
+                    {session.series.length}波形
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {activeSession ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#f8f5fd] p-3">
+                  <div className="text-xs text-[#665a78]">
+                    <p className="font-bold text-[#3b3152]">{activeSession.sourceFileName}</p>
+                    <p className="mt-1">
+                      {`${activeSession.timestampsSec.length}行 / ${Math.round(activeSession.durationSec)}秒`}
+                      {activeSession.missingChannels.length > 0
+                        ? ` / 未取得: ${activeSession.missingChannels
+                            .map((channel) => BRAINWAVE_CHANNEL_META[channel].shortLabel)
+                            .join(", ")}`
+                        : " / 7波形すべて取得済み"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => downloadCsv(activeSession)}
+                      className="h-8 rounded-lg border border-[#ddd6ea] bg-white px-3 text-xs font-bold text-[#4b3d6b]"
+                    >
+                      元CSVを保存
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSession(activeSession.id)}
+                      className="flex h-8 items-center gap-1 rounded-lg border border-[#f0d4dd] bg-white px-3 text-xs font-bold text-[#a8506e]"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      削除
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {visibleChannels.map((channel) => {
+                    const series = activeSession.series.find((item) => item.channel === channel);
+                    const stats = activeSession.stats.find((item) => item.channel === channel);
+                    if (!series) {
+                      return (
+                        <div
+                          key={channel}
+                          className="grid h-32 place-items-center rounded-lg border border-dashed border-[#ddd6ea] text-xs text-[#827690]"
+                        >
+                          {BRAINWAVE_CHANNEL_META[channel].label}: このCSVに列がありません
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={channel} className="space-y-1">
+                        <BrainwaveChart
+                          channel={channel}
+                          timestampsSec={activeSession.timestampsSec}
+                          values={series.values}
+                        />
+                        {stats ? (
+                          <p className="px-1 text-[11px] text-[#827690]">
+                            最小 {stats.min.toFixed(1)} / 最大 {stats.max.toFixed(1)} / 前半→後半{" "}
+                            {formatSigned(stats.trend)}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!showInternalChannels ? (
+                  <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs text-[#665a78]">
+                    α/β/γ/δ/θ の5波形はCSVから取り込み済みで、カルテに保管されています。
+                    利用者向け画面には表示しません。
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {/* ---- スクリーンショット ---- */}
+      <div className="space-y-3 border-t border-[#eee9f7] pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-[#342a49]">測定画面のスクリーンショット</h3>
+          {intakeSummary ? (
+            <span className="flex items-center gap-1 text-xs font-bold text-[#5e7d56]">
+              <Check className="h-3.5 w-3.5" />
+              {intakeSummary}
+            </span>
+          ) : null}
+        </div>
+
+        <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
+          4枚まとめて選択してください。画素を比較して同じグラフの重複は自動で除外します。
+          <strong className="font-bold">波形の種類はファイル名から推定するだけ</strong>なので、
+          各カードのタグを見て正しいものに直してください。CSVを取り込んでいる場合、
+          グラフの正データはCSV側が持ちます。
+        </p>
+
+        {uncoveredChannels.length > 0 && customerScreenshots.length > 0 ? (
+          <p className="flex flex-wrap items-center gap-2 rounded-lg bg-[#fdf3e3] p-3 text-xs font-bold text-[#8a6a35]">
+            <AlertTriangle className="h-4 w-4" />
+            まだ割り当てのない波形:{" "}
+            {uncoveredChannels.map((channel) => BRAINWAVE_CHANNEL_META[channel].label).join(" / ")}
+          </p>
+        ) : null}
+
+        {customerScreenshots.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-[#ddd6ea] p-4 text-center text-xs text-[#827690]">
+            まだスクリーンショットがありません。
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            {customerScreenshots.map((shot) => (
+              <article key={shot.id} className="overflow-hidden rounded-lg border border-[#e4dff0]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={shot.src} alt={shot.title} className="h-32 w-full object-cover" />
+                <div className="space-y-2 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-bold text-[#3b3152]">{shot.title}</p>
+                    <button
+                      type="button"
+                      onClick={() => removeScreenshot(shot.id)}
+                      className="shrink-0 text-[#a8506e]"
+                      aria-label={`${shot.title} を削除`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#827690]">{shot.detectionReason}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {BRAINWAVE_CHANNELS.map((channel) => {
+                      const active = shot.channels.includes(channel);
+                      return (
+                        <button
+                          key={channel}
+                          type="button"
+                          onClick={() => toggleScreenshotChannel(shot.id, channel)}
+                          aria-pressed={active}
+                          className={`rounded-full border px-2 py-1 text-[11px] font-bold transition ${
+                            active
+                              ? "border-transparent text-white"
+                              : "border-[#e4dff0] text-[#827690] hover:border-[#b7a5dd]"
+                          }`}
+                          style={active ? { backgroundColor: BRAINWAVE_CHANNEL_META[channel].color } : undefined}
+                        >
+                          {BRAINWAVE_CHANNEL_META[channel].shortLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

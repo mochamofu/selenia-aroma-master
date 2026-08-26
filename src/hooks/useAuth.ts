@@ -2,13 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createGuestCustomerSession, getDemoProfile, getStoredSession, signOut, type AuthSession } from "@/lib/auth";
-import { isCustomerOnlyApp } from "@/lib/appTarget";
+import { getStoredSession, signOut, type AuthSession } from "@/lib/auth";
 import { isDemoModeEnabled, supabase } from "@/lib/supabaseClient";
 import { getProfile } from "@/services/profileService";
 import type { Profile } from "@/types/profile";
 
-export function useAuth(requiredRole?: "customer" | "admin") {
+/**
+ * ログイン状態を取得し、未ログインなら /login へ送る。
+ *
+ * このリポジトリは管理者・施術者向けアプリ専用。
+ * 利用者（購入者）向けアプリは別リポジトリ（selenia-aroma-user）にある。
+ *
+ * 以前はロールごとに /admin と /dashboard へ振り分けていたが、これが
+ * 「利用者向け画面を開くと一瞬表示されてから管理者画面へ飛ぶ」原因だった。
+ * 振り分けは行わない。表示範囲の出し分けは `@/lib/disclosure` が担当する。
+ */
+export function useAuth() {
   const router = useRouter();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -16,6 +25,7 @@ export function useAuth(requiredRole?: "customer" | "admin") {
 
   useEffect(() => {
     let mounted = true;
+
     async function load() {
       try {
         if (supabase) {
@@ -27,53 +37,37 @@ export function useAuth(requiredRole?: "customer" | "admin") {
           }
           const currentProfile = await getProfile(user.id);
           if (!mounted) return;
-          if (isCustomerOnlyApp && currentProfile?.role === "admin") {
-            await signOut();
-            router.replace("/login");
-            return;
-          }
-          setSession({ userId: user.id, email: user.email ?? "", role: currentProfile?.role ?? "customer" });
+          setSession({
+            userId: user.id,
+            email: user.email ?? "",
+            role: currentProfile?.role ?? "customer",
+          });
           setProfile(currentProfile);
-          if (requiredRole && currentProfile?.role !== requiredRole) {
-            router.replace(currentProfile?.role === "admin" ? "/admin" : "/dashboard");
-          }
           return;
         }
+
         if (!isDemoModeEnabled) {
           router.replace("/login");
           return;
         }
+
         const demoSession = getStoredSession();
         if (!demoSession) {
-          if (isCustomerOnlyApp) {
-            const guestSession = createGuestCustomerSession();
-            setSession(guestSession);
-            setProfile(getDemoProfile(guestSession));
-            return;
-          }
           router.replace("/login");
           return;
         }
-        if (isCustomerOnlyApp && demoSession.role === "admin") {
-          await signOut();
-          router.replace("/login");
-          return;
-        }
-        const demoProfile = getDemoProfile(demoSession);
+        if (!mounted) return;
         setSession(demoSession);
-        setProfile(demoProfile);
-        if (requiredRole && demoSession.role !== requiredRole) {
-          router.replace(demoSession.role === "admin" ? "/admin" : "/dashboard");
-        }
       } finally {
         if (mounted) setLoading(false);
       }
     }
+
     load();
     return () => {
       mounted = false;
     };
-  }, [requiredRole, router]);
+  }, [router]);
 
   return {
     session,

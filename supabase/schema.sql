@@ -5,7 +5,7 @@ create table if not exists public.profiles (
   user_id uuid not null unique references auth.users(id) on delete cascade,
   name text not null,
   avatar_url text,
-  role text not null default 'customer' check (role in ('customer', 'admin')),
+  role text not null default 'customer' check (role in ('customer', 'instructor', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -97,6 +97,46 @@ create table if not exists public.essential_oils (
   created_at timestamptz not null default now()
 );
 
+-- 脳波測定セッション。CSV 1本 = 1行。
+-- リラックス・集中に加えて α/β/γ/δ/θ の5帯域も必ず保管する。
+-- 利用者向け画面に出すのは relax / focus のみ（表示側の責務）。
+create table if not exists public.brainwave_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  aroma_record_id uuid references public.aroma_records(id) on delete set null,
+  source_file_name text not null default '',
+  measured_at timestamptz not null default now(),
+  duration_sec numeric not null default 0,
+  -- 経過秒の配列。series の各値と同じ添字で対応する。
+  timestamps_sec double precision[] not null default '{}',
+  -- { "relax": [...], "focus": [...], "alpha": [...] } 形式。
+  series jsonb not null default '{}'::jsonb,
+  -- CSV に含まれず取り込めなかったチャンネル名。
+  missing_channels text[] not null default '{}',
+  -- チャンネルごとの min / max / mean / trend。
+  stats jsonb not null default '{}'::jsonb,
+  -- 元CSVの保管先（Storage の raw-brainwave-csv バケット）。
+  raw_csv_path text,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- iPad の測定画面スクリーンショット。1枚に複数波形が写るため channels は配列。
+create table if not exists public.brainwave_screenshots (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  brainwave_session_id uuid references public.brainwave_sessions(id) on delete set null,
+  title text not null default '',
+  storage_path text not null,
+  channels text[] not null default '{}',
+  -- 知覚ハッシュ。同一グラフの重複取り込みを防ぐために使う。
+  content_hash text not null default '',
+  detection_reason text not null default '',
+  measured_at timestamptz,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -109,6 +149,20 @@ as $$
   );
 $$;
 
+-- 認定インストラクター以上（instructor または admin）。
+-- 使い分け指針・禁忌の閲覧範囲。内部配合比率はここには含めない。
+create or replace function public.is_instructor()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where user_id = auth.uid() and role in ('instructor', 'admin')
+  );
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.aroma_records enable row level security;
 alter table public.aroma_ingredients enable row level security;
@@ -117,6 +171,8 @@ alter table public.mood_categories enable row level security;
 alter table public.base_blends enable row level security;
 alter table public.base_blend_private_recipes enable row level security;
 alter table public.essential_oils enable row level security;
+alter table public.brainwave_sessions enable row level security;
+alter table public.brainwave_screenshots enable row level security;
 
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
 create policy "profiles_select_own_or_admin" on public.profiles
@@ -186,6 +242,26 @@ drop policy if exists "essential_oils_admin_all" on public.essential_oils;
 create policy "essential_oils_admin_all" on public.essential_oils
 for all using (public.is_admin()) with check (public.is_admin());
 
+-- 脳波データは本人と管理者のみ。インストラクターであっても他人の測定値は見られない。
+drop policy if exists "brainwave_sessions_own_or_admin" on public.brainwave_sessions;
+create policy "brainwave_sessions_own_or_admin" on public.brainwave_sessions
+for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "brainwave_sessions_admin_all" on public.brainwave_sessions;
+create policy "brainwave_sessions_admin_all" on public.brainwave_sessions
+for all using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "brainwave_screenshots_own_or_admin" on public.brainwave_screenshots;
+create policy "brainwave_screenshots_own_or_admin" on public.brainwave_screenshots
+for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "brainwave_screenshots_admin_all" on public.brainwave_screenshots;
+create policy "brainwave_screenshots_admin_all" on public.brainwave_screenshots
+for all using (public.is_admin()) with check (public.is_admin());
+
+create index if not exists brainwave_sessions_user_idx on public.brainwave_sessions(user_id, measured_at desc);
+create index if not exists brainwave_screenshots_user_idx on public.brainwave_screenshots(user_id, created_at desc);
+create index if not exists brainwave_screenshots_hash_idx on public.brainwave_screenshots(user_id, content_hash);
 create index if not exists aroma_records_user_id_status_idx on public.aroma_records(user_id, status);
 create index if not exists aroma_ingredients_record_idx on public.aroma_ingredients(aroma_record_id, sort_order);
 create index if not exists favorites_user_record_idx on public.favorites(user_id, aroma_record_id);

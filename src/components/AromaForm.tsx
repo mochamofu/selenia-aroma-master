@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
+import { AdminShell } from "@/components/admin/AdminShell";
 import { FormSection } from "@/components/FormSection";
 import { Icon } from "@/components/Icon";
 import { ImageUploader } from "@/components/ImageUploader";
@@ -18,7 +18,7 @@ const textareaClass = "min-h-28 w-full rounded-2xl border border-[#e4d8c7] bg-[#
 
 export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: string }) {
   const router = useRouter();
-  const { session } = useAuth("admin");
+  const { session } = useAuth();
   const { record } = useAromaRecord(aromaId ?? "", session?.userId, true);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -56,14 +56,14 @@ export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: s
       ingredients: ingredients.filter((item) => item.name.trim()),
     });
     setToast(mode === "new" ? "保存しました" : "更新しました");
-    setTimeout(() => router.push("/admin"), 700);
+    setTimeout(() => router.push("/operator/blend-records"), 700);
   }
 
   return (
-    <AppShell variant="admin">
+    <AdminShell title={mode === "new" ? "香り制作記録の新規作成" : "香り制作記録の編集"}>
       <form onSubmit={onSubmit} className="space-y-5 px-5 py-6">
         <header className="flex items-center gap-3">
-          <Link href="/admin" className="grid h-11 w-11 place-items-center rounded-full bg-white shadow-md" aria-label="戻る"><Icon name="ArrowLeft" className="h-5 w-5" /></Link>
+          <Link href="/operator/blend-records" className="grid h-11 w-11 place-items-center rounded-full bg-white shadow-md" aria-label="戻る"><Icon name="ArrowLeft" className="h-5 w-5" /></Link>
           <div>
             <h1 className="text-2xl font-bold text-stone-900">{mode === "new" ? "新規アロマ記録作成" : "アロマ記録編集"}</h1>
             <p className="text-sm text-stone-500">セクションごとに入力してください</p>
@@ -126,6 +126,6 @@ export function AromaForm({ mode, aromaId }: { mode: "new" | "edit"; aromaId?: s
           <button type="submit" className="h-14 rounded-full bg-[#2f2a25] text-sm font-bold text-white shadow-lg">保存</button>
         </div>
       </form>
-    </AppShell>
+    </AdminShell>
   );
 }

@@ -1,22 +1,22 @@
-# Selenia Aroma
+# Selenia Aroma Karte（管理者・施術者向け）
 
-脳波アロマ測定サービスの事業者向け管理画面と、購入者向けアロマ記録画面をまとめた Next.js Web アプリです。利用者ごとのカルテ、1分測定の脳波画像、香りの制作履歴、μL / mL ベースの配合計算、ヒアリング回答、精油・ベースブレンド情報を一つの画面体系で扱います。
+脳波アロマ測定サービスの**管理者・施術者向け管理アプリ**です。利用者ごとのカルテ、
+1分測定の脳波データ（CSV / 測定画面のスクリーンショット）、香りの制作履歴、
+μL / mL ベースの配合計算、ヒアリング回答、精油・ベースブレンド情報を扱います。
+
+**利用者（購入者）向けアプリはこのリポジトリには含まれません。**
+別リポジトリ `mochamofu/selenia-aroma-user` が担当します。
 
 ## まず画面を開く
 
-下のリンクを押すだけで、すぐにデモ画面を確認できます。
+**[管理アプリを開く](https://aroma-records-pwa.vercel.app/operator/dashboard)**
 
-### 事業者向けカルテを試す
+PC・タブレットでの利用を前提にしています。サイドバーから
+顧客カルテ / 顧客一覧 / 香り制作記録 / ベースブレンド一覧 / エッセンシャルオイル一覧
+へ移動できます。
 
-**[アプリを起動する（脳波アロマ管理カルテ）](https://aroma-records-pwa.vercel.app/operator)**
-
-この画面で、顧客を選ぶ、過去の制作履歴を選ぶ、脳波画像を見る、配合量を5mL / 10mLで切り替える、ヒアリング回答を見る、という一連の操作を確認できます。
-
-### 購入者向け画面を試す
-
-**[購入者向け画面を開く](https://aroma-records-pwa.vercel.app/dashboard)**
-
-スマートフォン実機では、上のURLをそのままスマートフォンのブラウザで開いてください。PCでスマートフォン表示を試す場合は、ブラウザのデバイス表示を390×844程度にすると、実機に近い状態で確認できます。
+デモモードでは、メールアドレスに `admin` を含めると管理者、
+それ以外は認定インストラクターとしてログインします。
 
 詳しい操作手順は[非エンジニア向けデモ起動ガイド](docs/demo-start-guide.md)にまとめています。
 
@@ -24,19 +24,36 @@
 
 | 用途 | URL / ファイル |
 | --- | --- |
-| 公開URL（現行記録） | [https://aroma-records-pwa.vercel.app/operator](https://aroma-records-pwa.vercel.app/operator) |
-| ローカル起動 | `http://localhost:3000/operator` |
+| 公開URL | [https://aroma-records-pwa.vercel.app/operator/dashboard](https://aroma-records-pwa.vercel.app/operator/dashboard) |
+| ローカル起動 | `http://localhost:3000/operator/dashboard` |
 | 事業者向けカルテ画面 | `src/app/operator/page.tsx` |
-| 購入者向けトップ | `src/app/dashboard/page.tsx` |
+| 管理者ダッシュボード | `src/app/operator/dashboard/page.tsx` |
 | 仕様書（Markdown） | `docs/aroma-operator-current-capability-spec.md` |
 | 仕様書（Word） | `docs/aroma-operator-current-capability-spec.docx` |
 | 仕様書（PDF） | `docs/aroma-operator-current-capability-spec.pdf` |
 | 本番化仕様 | `docs/web-app-production-spec.md` |
 | 精油カタログ | `docs/oil-catalog-database.md` |
 | 内部ベースブレンド資料 | `docs/base-blend-recipes-internal.md` |
+| 開示ポリシー（3段階） | `docs/disclosure-policy.md` |
+| 脳波データ取り込み仕様 | `docs/brainwave-data-intake.md` |
 | 非エンジニア向けデモガイド | `docs/demo-start-guide.md` |
+| 開発環境セットアップ（Mac/Win） | `docs/development-setup.md` |
+| Vercelデプロイ運用（連携済み） | `docs/vercel-deployment.md` |
 
 公開URLは現行デモの記録です。環境やVercelのデプロイ状態によって表示内容・認証状態が変わるため、共有前に`/operator`と`/dashboard`を確認してください。
+
+## 対応環境
+
+Webアプリなので、OSを問わず同じコードが動きます。
+
+| 端末 | 想定する使い方 | 状態 |
+|---|---|---|
+| iPhone | 利用者向け画面（`/dashboard`）。ホーム画面に追加してPWAとして使う | 対応済み |
+| iPad | 事業者向けカルテ（`/operator`）。FocusCalmの測定端末と同じiPadで開く | 対応済み（縦2カラム / 横2カラム / 1280px以上で3カラム） |
+| Mac / Windows PC | カルテの管理作業、開発 | 対応済み |
+
+ノッチ・ホームインジケーターのセーフエリア、iOSの入力欄オートズーム抑止、
+`100dvh` によるアドレスバー対応を入れてあります。
 
 ## 現在の機能
 
@@ -47,7 +64,7 @@
 - `/aromas/[id]/reorder`: 再購入前の確認画面
 - `/moods` / `/moods/[mood]`: 目的・気分別の香り探索
 - `/oils/[slug]`: 追加精油36種類の図鑑ページ
-- `/base-blends` / `/base-blends/[id]`: ベースブレンド図鑑
+- `/base-blends` / `/base-blends/[id]`: ベースブレンド図鑑（香りの印象・使うシーン・使い分け指針まで解説）
 - `/profile`: プロフィール、お気に入り、ログアウト
 - `/admin`: 管理者ダッシュボード、顧客・制作記録の入口
 - `/operator`: 脳波画像、複数回の診断・制作履歴、ヒアリング回答、配合記録を紐づける事業者向けカルテ
@@ -59,23 +76,23 @@
 - 脳波画像のタイトル表示、拡大確認、アップロード想定（画像上限10MB）
 - 総量を5mL / 10mLなどで指定し、各材料を比率から自動換算
 - 単位をμL / mLで切り替え
-- ベースブレンドの内部比率は通常画面に表示せず、管理者解除後だけ表示
+- 脳波CSVの取り込み、7波形（リラックス / 集中 / α / β / γ / δ / θ）のグラフ描画
+- iPadスクリーンショットの一括取り込みと、重複グラフの自動除外
+- ベースブレンド情報の3段階開示（利用者 / 認定インストラクター / 管理者）
+- 内部配合比率はサーバー側のみで保持し、管理者のみ取得できる
 - 妊娠、妊活、出産直後、服薬などの禁忌・注意フラグをヒアリング結果に保持
 
 ## ローカル起動
 
-Node.js 22系で確認しています。
+Node.js 22系で確認しています。macOS / Windows どちらでも同じ手順です。
 
-```powershell
+```bash
 npm install
 npm run dev
 ```
 
-この環境でnpmがPATHにない場合は、プロジェクト内の実行ファイルを使います。
-
-```powershell
-.\\.tools\\node-v22.16.0-win-x64\\npm.cmd run dev
-```
+MacBookで初めて環境を作る場合（Node導入、SSH鍵、実機確認まで）は
+[開発環境セットアップ](docs/development-setup.md)を参照してください。
 
 起動後:
 
@@ -85,8 +102,9 @@ npm run dev
 
 ビルドとLint:
 
-```powershell
+```bash
 npm run lint
+npx tsc --noEmit
 npm run build
 ```
 
@@ -195,6 +213,9 @@ Codex、Claude、GLMなど別のエージェントで作業するときは、最
 2. SQL Editorで`supabase/schema.sql`を実行
 3. Storageに`aroma-images` bucketを作成
 4. Authのメール/パスワードログインを有効化
-5. `profiles.role`に`customer`または`admin`を設定
+5. `profiles.role`に`customer`、`instructor`、`admin`のいずれかを設定
+6. Storageに`brainwave-screenshots`と`raw-brainwave-csv` bucketを作成
 
-本番公開ではデモモードを無効化し、管理者パスワードや内部比率をクライアントコードへ埋め込まない構成へ移行してください。
+本番公開ではデモモードを無効化してください。内部配合比率は `src/server/baseBlendPrivateRecipes.ts`
+（`server-only`）と `/api/base-blends/private` に隔離済みで、クライアントバンドルには含まれません。
+開示範囲の考え方は[開示ポリシー](docs/disclosure-policy.md)を参照してください。
