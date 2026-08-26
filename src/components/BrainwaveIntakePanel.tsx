@@ -27,6 +27,8 @@ type BrainwaveIntakePanelProps = {
     updater: (screenshots: BrainwaveScreenshot[]) => BrainwaveScreenshot[],
   ) => void;
   onToast: (message: string) => void;
+  /** 元に戻せるよう、状態を変える直前に呼ぶ。 */
+  onCommitHistory: (label: string) => void;
 };
 
 function formatSigned(value: number): string {
@@ -42,6 +44,7 @@ export function BrainwaveIntakePanel({
   onSessionsChange,
   onScreenshotsChange,
   onToast,
+  onCommitHistory,
 }: BrainwaveIntakePanelProps) {
   const idCounter = useRef(0);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -147,6 +150,7 @@ export function BrainwaveIntakePanel({
 
     // 1枚のスクリーンショットに写っているグラフカードを切り出してから取り込む
     const result = await intakeScreenshotPanels(usable, existingHashes);
+    if (result.accepted.length > 0) onCommitHistory("スクリーンショットの取り込み");
 
     // 取り込むスクショは1枚が1回の測定。写っている2枚のグラフを同じ回としてまとめる。
     // 実機の並びはリラックス度と集中度で固定なので、位置から割り当てておき、
@@ -249,6 +253,7 @@ export function BrainwaveIntakePanel({
   }
 
   function removeScreenshot(shotId: string) {
+    onCommitHistory("グラフの削除");
     onScreenshotsChange((current) => current.filter((shot) => shot.id !== shotId));
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -19,8 +19,10 @@ import {
   Lock,
   Maximize2,
   Plus,
+  Redo2,
   Save,
   Search,
+  Undo2,
   Unlock,
   Upload,
   Users,
@@ -39,6 +41,7 @@ import { calculateAge as calculateClientAge, operatorClients } from "@/data/oper
 import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
 import { usePrivateBaseRecipes } from "@/hooks/usePrivateBaseRecipes";
+import { useEditHistory } from "@/hooks/useEditHistory";
 import { useViewerRole } from "@/hooks/useViewerRole";
 import { canDisclose, disclosureLevelForRole, DISCLOSURE_DESCRIPTIONS } from "@/lib/disclosure";
 import type { BrainwaveScreenshot, BrainwaveSession, ScreenshotScope } from "@/types/brainwave";
@@ -637,6 +640,20 @@ const TODAY_TRIALS = [
   "②＋ベルガモット・フランキンセンス",
 ];
 
+/** 注意事項の入力を早くするための定型文。自由入力もできる。 */
+const SAFETY_NOTE_PRESETS = [
+  "妊娠中",
+  "授乳中",
+  "妊活中",
+  "高血圧の既往あり",
+  "低血圧",
+  "喘息・アレルギー傾向",
+  "服薬中",
+  "敏感肌・皮膚トラブル",
+  "てんかんの既往あり",
+  "柑橘系の香りが苦手",
+];
+
 const todaySessionDate = "2026-05-26";
 
 const trialScreenshots: BrainwaveScreenshot[] = operatorCustomers.flatMap((customer) =>
@@ -738,6 +755,12 @@ export default function OperatorKartePage() {
   const [sessionSavedAt, setSessionSavedAt] = useState("");
   const [sessionSaving, setSessionSaving] = useState(false);
   const restoredForCustomer = useRef("");
+  // 利用者ごとの禁忌・注意事項。カルテから足したり外したりできるようにする。
+  const [safetyNoteOverrides, setSafetyNoteOverrides] = useState<Record<string, string[]>>({});
+  const [safetyNoteDraft, setSafetyNoteDraft] = useState("");
+  const [safetyNoteFormOpen, setSafetyNoteFormOpen] = useState(false);
+  // ヒアリングシートの編集内容。元の回答は残し、上書き分だけを持つ。
+  const [hearingSheetOverrides, setHearingSheetOverrides] = useState<Record<string, HearingSheet>>({});
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? null;
   // 業務用の利用者情報（利用者番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
@@ -787,7 +810,12 @@ export default function OperatorKartePage() {
   const customerDrafts = savedDrafts.filter((draft) => draft.customerId === selectedCustomerId);
   const latestRecord = [...customerRecords].sort((a, b) => b.made_at.localeCompare(a.made_at))[0];
   const activeHistory = getActiveHistory(selectedHistory, customerRecords, customerDrafts);
-  const activeHearingSheet = getActiveHearingSheet(activeHistory);
+  const baseSafetyNotes = selectedClient?.safetyNotes ?? [];
+  const safetyNotes = safetyNoteOverrides[selectedCustomerId] ?? baseSafetyNotes;
+  const storedHearingSheet = getActiveHearingSheet(activeHistory);
+  const activeHearingSheet = storedHearingSheet
+    ? hearingSheetOverrides[storedHearingSheet.id] ?? storedHearingSheet
+    : null;
   const formulaTotalUl = useMemo(() => addedOils.reduce((total, oil) => total + parseVolumeUl(oil.amountUl), 0), [addedOils]);
   const sourceVolumeUl = parseVolumeMl(sourceVolumeMl) * 1000;
   const targetVolumeUl = parseVolumeMl(targetVolumeMl) * 1000;
@@ -889,6 +917,87 @@ export default function OperatorKartePage() {
     setToast("この端末に保存した本日のセッションを削除しました。");
   }
 
+  // 「戻る・進む」で元に戻せる範囲。1回で完結する操作だけを記録する。
+  const snapshotKarte = useCallback(
+    () => ({
+      screenshots: brainwaveScreenshots,
+      addedOils,
+      safetyNoteOverrides,
+      hearingSheetOverrides,
+      blendTitle,
+      makerNote,
+      selectedBaseId,
+    }),
+    [
+      brainwaveScreenshots,
+      addedOils,
+      safetyNoteOverrides,
+      hearingSheetOverrides,
+      blendTitle,
+      makerNote,
+      selectedBaseId,
+    ],
+  );
+
+  const restoreKarte = useCallback((value: ReturnType<typeof snapshotKarte>) => {
+    setBrainwaveScreenshots(value.screenshots);
+    setAddedOils(value.addedOils);
+    setSafetyNoteOverrides(value.safetyNoteOverrides);
+    setHearingSheetOverrides(value.hearingSheetOverrides);
+    setBlendTitle(value.blendTitle);
+    setMakerNote(value.makerNote);
+    setSelectedBaseId(value.selectedBaseId);
+  }, []);
+
+  const history = useEditHistory(snapshotKarte, restoreKarte);
+
+  function undoEdit() {
+    const label = history.undo();
+    if (label) setToast(`「${label}」を元に戻しました。`);
+  }
+
+  function redoEdit() {
+    const label = history.redo();
+    if (label) setToast(`「${label}」をやり直しました。`);
+  }
+
+  /** 禁忌・注意事項を足す。 */
+  function addSafetyNote() {
+    const value = safetyNoteDraft.trim();
+    if (!value || !selectedCustomerId) return;
+    if (safetyNotes.includes(value)) {
+      setToast("同じ注意事項がすでに登録されています。");
+      return;
+    }
+    history.commit("注意事項の追加");
+    setSafetyNoteOverrides((current) => ({
+      ...current,
+      [selectedCustomerId]: [...safetyNotes, value],
+    }));
+    setSafetyNoteDraft("");
+    setSafetyNoteFormOpen(false);
+    setToast("注意事項を追加しました。");
+  }
+
+  /** 禁忌・注意事項を外す。 */
+  function removeSafetyNote(note: string) {
+    if (!selectedCustomerId) return;
+    history.commit("注意事項の削除");
+    setSafetyNoteOverrides((current) => ({
+      ...current,
+      [selectedCustomerId]: safetyNotes.filter((item) => item !== note),
+    }));
+    setToast("注意事項を外しました。");
+  }
+
+  /** ヒアリングシートの回答を書き換える。元の回答は残し、上書き分だけ持つ。 */
+  function updateHearingSheet(patch: Partial<HearingSheet>, label: string) {
+    if (!activeHearingSheet) return;
+    history.commit(label);
+    const next = { ...activeHearingSheet, ...patch };
+    setHearingSheetOverrides((current) => ({ ...current, [next.id]: next }));
+  }
+
   /** グラフをダブルクリックしたとき。選択したうえで拡大表示を開く。 */
   function expandBrainwaveImage(imageId: string) {
     selectBrainwaveImage(imageId);
@@ -908,6 +1017,7 @@ export default function OperatorKartePage() {
 
   /** 実機の並びが逆だったとき用。その回のリラックス度と集中度を入れ替える。 */
   function swapTrialChannels(trialNo: number) {
+    history.commit("リラックス度と集中度の入れ替え");
     setBrainwaveScreenshots((current) =>
       current.map((shot) => {
         if (shot.customerId !== selectedCustomerId || shot.scope !== "trial" || shot.trialNo !== trialNo) {
@@ -1105,13 +1215,39 @@ export default function OperatorKartePage() {
       title="利用者カルテ"
       subtitle="測定・制作・レポートを1人分まとめて扱います"
       actions={
-        <button
-          onClick={saveDraft}
-          className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[var(--admin-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--admin-primary-strong)]"
-        >
-          <Save className="h-4 w-4" />
-          カルテを保存
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* 消してしまった画像や文言を戻すためのボタン。文字入力1文字ずつではなく、
+              追加・削除・入れ替えといった操作の単位で戻る。 */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undoEdit}
+              disabled={!history.canUndo}
+              aria-label="元に戻す"
+              title={history.canUndo ? `元に戻す（${history.lastLabel}）` : "元に戻せる操作はありません"}
+              className="grid h-10 w-10 place-items-center rounded-lg border border-[var(--admin-border)] text-[var(--admin-text-muted)] transition hover:border-[var(--admin-primary)] hover:text-[var(--admin-primary-strong)] disabled:opacity-40 disabled:hover:border-[var(--admin-border)]"
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={redoEdit}
+              disabled={!history.canRedo}
+              aria-label="やり直す"
+              title={history.canRedo ? "やり直す" : "やり直せる操作はありません"}
+              className="grid h-10 w-10 place-items-center rounded-lg border border-[var(--admin-border)] text-[var(--admin-text-muted)] transition hover:border-[var(--admin-primary)] hover:text-[var(--admin-primary-strong)] disabled:opacity-40 disabled:hover:border-[var(--admin-border)]"
+            >
+              <Redo2 className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            onClick={saveDraft}
+            className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[var(--admin-primary)] px-3 text-xs font-bold text-white transition hover:bg-[var(--admin-primary-strong)]"
+          >
+            <Save className="h-4 w-4" />
+            カルテを保存
+          </button>
+        </div>
       }
     >
       <div>
@@ -1162,11 +1298,84 @@ export default function OperatorKartePage() {
               )}
             </div>
 
-            {selectedClient && selectedClient.safetyNotes.length > 0 ? (
-              <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-[var(--admin-warning-soft)] px-3 py-2 text-xs font-bold text-[var(--admin-warning)]">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {selectedClient.safetyNotes.join(" / ")}
-              </p>
+            {selectedCustomer ? (
+              <div className="mt-2 rounded-lg bg-[var(--admin-warning-soft)] px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-[var(--admin-warning)]">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    禁忌・注意事項
+                  </span>
+                  {safetyNotes.length === 0 ? (
+                    <span className="text-xs text-[var(--admin-text-muted)]">申告なし</span>
+                  ) : (
+                    safetyNotes.map((note) => (
+                      <span
+                        key={note}
+                        className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--admin-warning)]"
+                      >
+                        {note}
+                        <button
+                          type="button"
+                          onClick={() => removeSafetyNote(note)}
+                          aria-label={`${note} を外す`}
+                          className="text-[var(--admin-text-muted)] transition hover:text-[var(--admin-danger)]"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSafetyNoteFormOpen((open) => !open)}
+                    className="flex h-7 items-center gap-1 rounded-lg border border-[var(--admin-warning)]/40 bg-white px-2 text-xs font-bold text-[var(--admin-warning)] transition hover:bg-[var(--admin-warning-soft)]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    注意事項を追加
+                  </button>
+                </div>
+
+                {safetyNoteFormOpen ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {SAFETY_NOTE_PRESETS.filter((preset) => !safetyNotes.includes(preset)).map(
+                        (preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setSafetyNoteDraft(preset)}
+                            className="rounded-full border border-[var(--admin-border)] bg-white px-2.5 py-1 text-xs transition hover:border-[var(--admin-warning)]"
+                          >
+                            {preset}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        value={safetyNoteDraft}
+                        onChange={(event) => setSafetyNoteDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") addSafetyNote();
+                        }}
+                        placeholder="例: 高血圧の既往あり（ローズマリーは要確認）"
+                        className="h-10 min-w-56 flex-1 rounded-lg border border-[var(--admin-border)] bg-white px-3 text-base outline-none focus:border-[var(--admin-primary)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={addSafetyNote}
+                        disabled={!safetyNoteDraft.trim()}
+                        className="h-10 shrink-0 rounded-lg bg-[var(--admin-primary)] px-4 text-xs font-bold text-white transition hover:bg-[var(--admin-primary-strong)] disabled:opacity-40"
+                      >
+                        追加する
+                      </button>
+                    </div>
+                    <p className="text-[11px] leading-4 text-[var(--admin-text-muted)]">
+                      医療判断ではなく、調香前の確認メモです。該当がある場合は専門家・医師・薬剤師の確認を優先します。
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
             <div className="mt-3 flex gap-1 overflow-x-auto border-b border-[var(--admin-border)]">
@@ -1303,6 +1512,7 @@ export default function OperatorKartePage() {
                   onSessionsChange={setBrainwaveSessions}
                   onScreenshotsChange={setBrainwaveScreenshots}
                   onToast={setToast}
+                  onCommitHistory={history.commit}
                 />
                   </>
                 ) : null}
@@ -1336,7 +1546,7 @@ export default function OperatorKartePage() {
                   </div>
                   <HistoryDetail history={activeHistory} />
                   <div className="mt-4">
-                    <HearingSheetPanel sheet={activeHearingSheet} />
+                    <HearingSheetPanel sheet={activeHearingSheet} onChange={updateHearingSheet} />
                   </div>
                 </section>
                 ) : null}
@@ -1497,6 +1707,7 @@ export default function OperatorKartePage() {
                           type="button"
                           onClick={() => {
                             const id = nextLocalId("oil");
+                            history.commit("材料の追加");
                             setAddedOils((rows) => [...rows, { id, name: "ローマンカモミール", amountUl: "1000" }]);
                           }}
                           className="flex h-8 items-center gap-1 rounded-lg border border-[#ded7ec] px-2 text-xs font-bold text-[#8d6fd1]"
@@ -1549,7 +1760,7 @@ export default function OperatorKartePage() {
                             <output className="flex h-10 items-center rounded-lg border border-[#ddd6ea] bg-white px-2 text-sm font-bold text-[#3b3152]">
                               {formatDisplayVolume(row.calculatedVolumeUl, volumeUnit)}
                             </output>
-                            <button type="button" onClick={() => setAddedOils((rows) => rows.filter((item) => item.id !== row.id))} className="rounded-lg bg-[#f3effb] text-[#7b7088]" aria-label="追加オイルを削除">×</button>
+                            <button type="button" onClick={() => { history.commit("材料の削除"); setAddedOils((rows) => rows.filter((item) => item.id !== row.id)); }} className="rounded-lg bg-[#f3effb] text-[#7b7088]" aria-label="追加オイルを削除">×</button>
                             <p className="col-span-4 -mt-1 px-1 text-[11px] text-[#9a8caf]">構成比 {formatNumber(row.ratioPercent)}%</p>
                           </div>
                         ))}
@@ -2018,7 +2229,13 @@ function HistoryDetail({ history }: { history: ReturnType<typeof getActiveHistor
   );
 }
 
-function HearingSheetPanel({ sheet }: { sheet: HearingSheet | null }) {
+function HearingSheetPanel({
+  sheet,
+  onChange,
+}: {
+  sheet: HearingSheet | null;
+  onChange: (patch: Partial<HearingSheet>, label: string) => void;
+}) {
   if (!sheet) {
     return (
       <section className="rounded-lg border border-dashed border-[#d8d0e8] bg-white p-4">
@@ -2055,10 +2272,26 @@ function HearingSheetPanel({ sheet }: { sheet: HearingSheet | null }) {
       </div>
 
       <div className="mt-4 space-y-2">
-        <ResponseBlock label="欲しい香り" value={sheet.desiredScent} />
-        <ResponseBlock label="香りの好み・避けたい印象" value={sheet.preferenceNotes} />
-        <ResponseBlock label="持病・体調メモ" value={sheet.healthNotes} />
-        <ResponseBlock label="服薬・医療確認メモ" value={sheet.medicationNotes} />
+        <ResponseBlock
+          label="欲しい香り"
+          value={sheet.desiredScent}
+          onCommit={(value) => onChange({ desiredScent: value }, "欲しい香りの編集")}
+        />
+        <ResponseBlock
+          label="香りの好み・避けたい印象"
+          value={sheet.preferenceNotes}
+          onCommit={(value) => onChange({ preferenceNotes: value }, "香りの好みの編集")}
+        />
+        <ResponseBlock
+          label="持病・体調メモ"
+          value={sheet.healthNotes}
+          onCommit={(value) => onChange({ healthNotes: value }, "持病・体調メモの編集")}
+        />
+        <ResponseBlock
+          label="服薬・医療確認メモ"
+          value={sheet.medicationNotes}
+          onCommit={(value) => onChange({ medicationNotes: value }, "服薬メモの編集")}
+        />
       </div>
 
       <div className="mt-4 rounded-lg border border-[#ead7bb] bg-[#fffaf0] p-3">
@@ -2078,17 +2311,66 @@ function HearingSheetPanel({ sheet }: { sheet: HearingSheet | null }) {
         </p>
       </div>
 
-      <p className="mt-3 rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">{sheet.operatorSummary}</p>
+      <div className="mt-3">
+        <ResponseBlock
+          label="施術者のまとめ"
+          value={sheet.operatorSummary}
+          onCommit={(value) => onChange({ operatorSummary: value }, "施術者のまとめの編集")}
+        />
+      </div>
     </section>
   );
 }
 
-function ResponseBlock({ label, value }: { label: string; value: string }) {
+/**
+ * ヒアリングシートの1項目。
+ *
+ * Googleフォームの回答をそのまま出しつつ、その場で直せるようにする。
+ * 入力中は記録せず、離れたときに変わっていれば1回の操作として記録する
+ * （1文字ずつ「戻る」で消えていくのを避けるため）。
+ */
+function ResponseBlock({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  onCommit?: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  // 履歴を切り替えるなどで元の値が変わったら、表示している下書きも入れ替える。
+  const [committed, setCommitted] = useState(value);
+  if (committed !== value) {
+    setCommitted(value);
+    setDraft(value);
+  }
+
+  if (!onCommit) {
+    return (
+      <div className="rounded-lg border border-[#e8e2f2] bg-[#fbf9ff] p-3">
+        <p className="text-[11px] font-bold text-[#7b708d]">{label}</p>
+        <p className="mt-1 text-sm leading-6 text-[#584d6b]">{value}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-[#e8e2f2] bg-[#fbf9ff] p-3">
-      <p className="text-[11px] font-bold text-[#7b708d]">{label}</p>
-      <p className="mt-1 text-sm leading-6 text-[#584d6b]">{value}</p>
-    </div>
+    <label className="block rounded-lg border border-[#e8e2f2] bg-[#fbf9ff] p-3">
+      <span className="text-[11px] font-bold text-[#7b708d]">{label}</span>
+      <textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== committed) {
+            setCommitted(draft);
+            onCommit(draft);
+          }
+        }}
+        rows={2}
+        className="mt-1 w-full resize-y rounded-lg border border-transparent bg-transparent text-sm leading-6 text-[#584d6b] outline-none transition focus:border-[#8d6fd1] focus:bg-white focus:px-2 focus:py-1"
+      />
+    </label>
   );
 }
 
