@@ -557,7 +557,10 @@ export default function OperatorKartePage() {
   const allBaseBlends = useMemo(() => [...demoBaseBlends, ...customBaseBlends], [customBaseBlends]);
   const allEssentialOils = useMemo(() => [...essentialOils, ...customEssentialOils], [customEssentialOils]);
   const [karteTab, setKarteTab] = useState<KarteTab>("measurements");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.user_id ?? "");
+  // 問診中は画面に他の利用者の氏名が出ないよう、初期状態では誰も選択しない。
+  // 「顧客を呼び出す」を押したときだけ一覧（ClientPicker）を開く。
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [brainwaveImages, setBrainwaveImages] = useState<BrainwaveImage[]>(initialImages);
   const [selectedImageId, setSelectedImageId] = useState(operatorAromas[0]?.brainwave_image_id ?? initialImages[0]?.id ?? "");
   const [newImageTitle, setNewImageTitle] = useState("1分測定グラフ");
@@ -588,7 +591,7 @@ export default function OperatorKartePage() {
   const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>([]);
   const [toast, setToast] = useState("");
 
-  const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? customers[0];
+  const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? null;
   // 業務用の顧客情報（顧客番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
   const selectedClient = operatorClients.find((client) => client.userId === selectedCustomerId) ?? null;
   const selectedClientAge = selectedClient ? calculateClientAge(selectedClient.birthday) : null;
@@ -630,6 +633,7 @@ export default function OperatorKartePage() {
 
   function selectCustomer(customerId: string) {
     setSelectedCustomerId(customerId);
+    setClientPickerOpen(false);
     const firstRecord = operatorAromas.find((record) => record.user_id === customerId);
     const firstDraft = savedDrafts.find((draft) => draft.customerId === customerId);
     if (firstRecord) {
@@ -900,6 +904,24 @@ export default function OperatorKartePage() {
               <h2 className="text-xl font-bold text-[var(--admin-text)]">
                 {selectedClient?.name ?? selectedCustomer?.name ?? "顧客未選択"}
               </h2>
+              <button
+                type="button"
+                onClick={() => setClientPickerOpen(true)}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--admin-border)] px-2.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:border-[var(--admin-primary)] hover:text-[var(--admin-primary-strong)]"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {selectedCustomer ? "顧客を切り替える" : "顧客を呼び出す"}
+              </button>
+              {selectedCustomer ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomerId("")}
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--admin-border)] px-2.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:border-[var(--admin-danger)] hover:text-[var(--admin-danger)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  カルテを閉じる
+                </button>
+              ) : null}
               {selectedClient ? (
                 <>
                   <span className="rounded-lg bg-[var(--admin-primary-soft)] px-2.5 py-1 text-xs font-bold text-[var(--admin-primary-strong)]">
@@ -955,16 +977,28 @@ export default function OperatorKartePage() {
             </div>
           ) : null}
 
-          {(
-            <section className="grid gap-4 p-4 md:grid-cols-[240px_minmax(0,1fr)] lg:p-6 xl:grid-cols-[260px_minmax(0,1fr)_380px]">
-              <ClientPanel
-                customers={customers}
-                selectedCustomerId={selectedCustomerId}
-                savedDrafts={savedDrafts}
-                onSelectCustomer={selectCustomer}
-                onOpenAddCustomer={() => setCreationPanel("customer")}
-              />
-
+          {!selectedCustomer ? (
+            <section className="p-4 lg:p-6">
+              <div className="mx-auto max-w-md rounded-lg border border-dashed border-[#ddd6ea] bg-white p-10 text-center">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#f3effb] text-[#8d6fd1]">
+                  <Users className="h-6 w-6" />
+                </span>
+                <h2 className="mt-4 text-lg font-bold text-[#3b3152]">顧客を呼び出してください</h2>
+                <p className="mt-2 text-sm leading-6 text-[#7b7088]">
+                  問診中に他の利用者の氏名が画面に出ないよう、カルテは呼び出すまで表示しません。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setClientPickerOpen(true)}
+                  className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-[#8d6fd1] px-5 text-sm font-bold text-white transition hover:bg-[#755bb4]"
+                >
+                  <Search className="h-4 w-4" />
+                  顧客を呼び出す
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="grid gap-4 p-4 lg:p-6 xl:grid-cols-[minmax(0,1fr)_380px]">
               <div className="min-w-0 space-y-4">
                 {karteTab === "measurements" ? (
                   <>
@@ -1103,7 +1137,7 @@ export default function OperatorKartePage() {
                 ) : null}
               </div>
 
-              <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1">
+              <aside className="min-w-0 space-y-4">
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
                     <div>
@@ -1271,6 +1305,19 @@ export default function OperatorKartePage() {
         </div>
       </div>
 
+      <ClientPicker
+        open={clientPickerOpen}
+        customers={customers}
+        selectedCustomerId={selectedCustomerId}
+        savedDrafts={savedDrafts}
+        onSelectCustomer={selectCustomer}
+        onOpenAddCustomer={() => {
+          setClientPickerOpen(false);
+          setCreationPanel("customer");
+        }}
+        onClose={() => setClientPickerOpen(false)}
+      />
+
       {creationPanel === "customer" ? (
         <ModalShell
           title="顧客カルテ追加"
@@ -1399,63 +1446,144 @@ export default function OperatorKartePage() {
   );
 }
 
-function ClientPanel({
+function ClientPicker({
+  open,
   customers,
   selectedCustomerId,
   savedDrafts,
   onSelectCustomer,
   onOpenAddCustomer,
+  onClose,
 }: {
+  open: boolean;
   customers: Profile[];
   selectedCustomerId: string;
   savedDrafts: SavedDraft[];
   onSelectCustomer: (customerId: string) => void;
   onOpenAddCustomer: () => void;
+  onClose: () => void;
 }) {
+  const [query, setQuery] = useState("");
+
+  // 閉じている間は一覧を描画しない。問診中に他の利用者の氏名が
+  // 画面へ残らないようにするため、DOM ごと消す。
+  if (!open) return null;
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? customers.filter((customer) =>
+        `${customer.name} ${customer.user_id}`.toLowerCase().includes(q),
+      )
+    : customers;
+
   return (
-    <aside className="rounded-lg border border-[#e4dff0] bg-white p-3">
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-bold text-[#3b3152]"><Users className="h-4 w-4 text-[#8d6fd1]" />顧客階層</h2>
-          <span className="text-xs font-bold text-[#7f738d]">{customers.length}名</span>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenAddCustomer}
-          className="flex h-8 items-center gap-1 rounded-lg bg-[#8d6fd1] px-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#755bb4]"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          カルテ追加
-        </button>
-      </div>
-      <div className="mt-3 space-y-2">
-        {customers.map((customer) => {
-          const recordCount = operatorAromas.filter((record) => record.user_id === customer.user_id).length + savedDrafts.filter((draft) => draft.customerId === customer.user_id).length;
-          const isActive = customer.user_id === selectedCustomerId;
-          return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        aria-label="顧客の呼び出しを閉じる"
+        onClick={onClose}
+        className="absolute inset-0 bg-[#2b2340]/45"
+      />
+      <div
+        role="dialog"
+        aria-label="顧客を呼び出す"
+        className="safe-top relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+      >
+        <div className="border-b border-[#e4dff0] px-5 py-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#3b3152]">
+              <Users className="h-4 w-4 text-[#8d6fd1]" />
+              顧客を呼び出す
+            </h2>
             <button
-              key={customer.id}
               type="button"
-              onClick={() => onSelectCustomer(customer.user_id)}
-              className={`w-full rounded-lg border p-3 text-left transition ${isActive ? "border-[#8d6fd1] bg-[#f3effb]" : "border-[#e6e0f0] bg-white hover:border-[#b7a5dd]"}`}
+              onClick={onClose}
+              aria-label="閉じる"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[#e4dff0]"
             >
-              <div className="flex items-center gap-3">
-                <div className={`grid h-10 w-10 place-items-center rounded-lg text-sm font-bold ${isActive ? "bg-[#8d6fd1] text-white" : "bg-[#f1edf8] text-[#665a78]"}`}>{customer.name.slice(0, 1)}</div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-[#3b3152]">{customer.name}</p>
-                  <p className="truncate text-xs text-[#7b708d]">{customer.user_id}</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-[#9a8caf]" />
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-[#7b708d]">
-                <span>履歴 {recordCount}件</span>
-                <span>{customer.favorite_types?.[0] ?? "好み未設定"}</span>
-              </div>
+              <X className="h-4 w-4" />
             </button>
-          );
-        })}
+          </div>
+
+          <div className="mt-3 flex h-10 items-center gap-2 rounded-lg border border-[#ddd6ea] px-3">
+            <Search className="h-4 w-4 shrink-0 text-[#827690]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="氏名・顧客IDで検索"
+              autoFocus
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            />
+            {query ? (
+              <button type="button" onClick={() => setQuery("")} aria-label="検索条件を消す">
+                <X className="h-4 w-4 text-[#827690]" />
+              </button>
+            ) : null}
+          </div>
+
+          <p className="mt-2 text-xs text-[#827690]">
+            {q ? `${filtered.length}名が一致` : `登録 ${customers.length}名`}
+          </p>
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
+          {filtered.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-[#ddd6ea] p-8 text-center text-sm text-[#827690]">
+              該当する顧客がいません。
+            </p>
+          ) : (
+            filtered.map((customer) => {
+              const recordCount =
+                operatorAromas.filter((record) => record.user_id === customer.user_id).length +
+                savedDrafts.filter((draft) => draft.customerId === customer.user_id).length;
+              const isActive = customer.user_id === selectedCustomerId;
+              return (
+                <button
+                  key={customer.id}
+                  type="button"
+                  onClick={() => onSelectCustomer(customer.user_id)}
+                  className={`w-full rounded-lg border p-3 text-left transition ${
+                    isActive
+                      ? "border-[#8d6fd1] bg-[#f3effb]"
+                      : "border-[#e6e0f0] bg-white hover:border-[#b7a5dd]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`grid h-10 w-10 place-items-center rounded-lg text-sm font-bold ${
+                        isActive ? "bg-[#8d6fd1] text-white" : "bg-[#f1edf8] text-[#665a78]"
+                      }`}
+                    >
+                      {customer.name.slice(0, 1)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-[#3b3152]">{customer.name}</p>
+                      <p className="truncate text-xs text-[#7b708d]">{customer.user_id}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-[#9a8caf]" />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-[#7b708d]">
+                    <span>履歴 {recordCount}件</span>
+                    <span>{customer.favorite_types?.[0] ?? "好み未設定"}</span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t border-[#e4dff0] px-5 py-4">
+          <button
+            type="button"
+            onClick={onOpenAddCustomer}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#8d6fd1] text-xs font-bold text-white transition hover:bg-[#755bb4]"
+          >
+            <Plus className="h-4 w-4" />
+            カルテを新規追加
+          </button>
+        </div>
       </div>
-    </aside>
+    </div>
   );
 }
 
