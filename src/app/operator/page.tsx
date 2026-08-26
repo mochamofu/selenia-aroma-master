@@ -530,21 +530,43 @@ const moodFilters = [
   { slug: "refresh", label: "リフレッシュ" },
 ];
 
-// 取り込んだグラフと同じ入れ物に、デモ用のサンプル波形を入れておく。
-// 別々の状態にしていたため、スクショを取り込んでもサンプルが残り続けていた。
-const initialScreenshots: BrainwaveScreenshot[] = operatorAromas.map((record, index) => ({
-  id: record.brainwave_image_id,
-  customerId: record.user_id,
-  title: `${record.title} / 1分測定`,
-  src: createWaveSvg(record.title.replace(/\s*\d+mL/i, ""), waveColor(index, "primary"), waveColor(index, "secondary"), 7 + index * 6),
-  channels: [],
-  detectionReason: "デモ用のサンプル波形",
-  contentHash: `sample-${record.brainwave_image_id}`,
-  measuredAt: `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`,
-  uploadedAt: record.made_at,
-  note: `${record.title} に紐づく脳波画像。${record.maker_note}`,
-  source: "sample",
-}));
+/**
+ * デモ用の脳波画像。
+ *
+ * FocusCalm の測定画面に出るグラフカードを再現した PNG を使う。
+ * 制作記録1件につきリラックス度と集中度の2枚を持たせる。
+ * α〜θ の5帯域はカルテの画像としては持たせない（CSVに保管する方針）。
+ */
+const initialScreenshots: BrainwaveScreenshot[] = operatorAromas.flatMap((record, index) => {
+  const variant = (index % 4) + 1;
+  const measuredAt = `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`;
+  const base = {
+    customerId: record.user_id,
+    measuredAt,
+    uploadedAt: record.made_at,
+    detectionReason: "デモデータ",
+    note: "",
+    source: "sample" as const,
+  };
+  return [
+    {
+      ...base,
+      id: `${record.brainwave_image_id}-relax`,
+      title: `${record.title} / リラックス度`,
+      src: `/demo/brainwave/relax-${variant}.png`,
+      channels: ["relax" as const],
+      contentHash: `sample-${record.brainwave_image_id}-relax`,
+    },
+    {
+      ...base,
+      id: `${record.brainwave_image_id}-focus`,
+      title: `${record.title} / 集中度`,
+      src: `/demo/brainwave/focus-${variant}.png`,
+      channels: ["focus" as const],
+      contentHash: `sample-${record.brainwave_image_id}-focus`,
+    },
+  ];
+});
 
 const customOilNames = ["ローズウッド", "カモミール", "ローマンカモミール"];
 
@@ -594,7 +616,7 @@ export default function OperatorKartePage() {
   }, [searchString]);
   // 画面で選び直したらそちらが優先。まだ触っていなければ URL の指定を使う。
   const selectedCustomerId = manualCustomerId ?? customerIdFromUrl;
-  const [selectedImageId, setSelectedImageId] = useState(operatorAromas[0]?.brainwave_image_id ?? "");
+  const [selectedImageId, setSelectedImageId] = useState("");
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedBaseId, setSelectedBaseId] = useState(initialOperatorRecord?.base_blend_id ?? "base-02");
   const [addedOils, setAddedOils] = useState<AddedOil[]>(defaultAddedOils);
@@ -626,7 +648,14 @@ export default function OperatorKartePage() {
   const selectedClient = operatorClients.find((client) => client.userId === selectedCustomerId) ?? null;
   const selectedClientAge = selectedClient ? calculateClientAge(selectedClient.birthday) : null;
   // 脳波画像とスクショ取り込みは同じ入れ物を見る。取り込むと即座にここへ反映される。
-  const customerImages = brainwaveScreenshots.filter((image) => image.customerId === selectedCustomerId);
+  // カルテに出すのはリラックス度と集中度だけ。α〜θ のグラフはここには並べない
+  // （数値は CSV に保管してあり、必要なときはそちらから描き直す）。
+  // 取り込み直後でまだ種類が決まっていないものは、取りこぼさないよう表示する。
+  const customerImages = brainwaveScreenshots.filter((image) => {
+    if (image.customerId !== selectedCustomerId) return false;
+    if (image.channels.length === 0) return true;
+    return image.channels.some((channel) => channel === "relax" || channel === "focus");
+  });
   const activeImage = customerImages.find((image) => image.id === selectedImageId) ?? customerImages[0];
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
   const selectedBaseNote = allBaseNotes[selectedBase.id];
@@ -1005,7 +1034,7 @@ export default function OperatorKartePage() {
                 <section className="rounded-lg border border-[#e4dff0] bg-white p-4">
                   <div>
                     <h2 className="flex items-center gap-2 text-lg font-bold text-[#342a49]"><Activity className="h-5 w-5 text-[#8d6fd1]" />脳波画像</h2>
-                    <p className="mt-1 text-xs text-[#827690]">取り込んだグラフがここに並びます。選択すると右側で大きく確認できます。</p>
+                    <p className="mt-1 text-xs text-[#827690]">リラックス度と集中度のグラフを並べます。選択すると右側で大きく確認できます。</p>
                   </div>
                   {customerImages.length === 0 ? (
                     <p className="mt-4 rounded-lg border border-dashed border-[#ddd6ea] bg-[#faf8fe] p-6 text-center text-xs leading-5 text-[#827690]">
@@ -2149,45 +2178,3 @@ function formula(...items: Array<string | number>): FormulaItem[] {
   return formulaItems;
 }
 
-function waveColor(index: number, role: "primary" | "secondary") {
-  const primaryColors = ["#8d6fd1", "#6f63c6", "#a78bda", "#806c46", "#9b82c8", "#78649b", "#875e4f", "#7d72bf"];
-  const secondaryColors = ["#c7893a", "#d29a48", "#b75f48", "#8c6a44", "#b78657", "#9b7a45", "#c48a65", "#a56f3e"];
-  return role === "primary" ? primaryColors[index % primaryColors.length] : secondaryColors[index % secondaryColors.length];
-}
-
-function createWaveSvg(label: string, primary: string, secondary: string, seed: number) {
-  const primaryPoints = makeWavePoints(seed, 54, 0.24, 206);
-  const secondaryPoints = makeWavePoints(seed + 11, 34, 0.31, 270);
-  const thirdPoints = makeWavePoints(seed + 23, 24, 0.44, 332);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520">
-      <rect width="900" height="520" fill="#f8f5fd"/>
-      <g stroke="#e5dff1" stroke-width="1">
-        ${Array.from({ length: 9 }, (_, index) => `<line x1="${100 + index * 90}" y1="72" x2="${100 + index * 90}" y2="438"/>`).join("")}
-        ${Array.from({ length: 7 }, (_, index) => `<line x1="70" y1="${88 + index * 58}" x2="838" y2="${88 + index * 58}"/>`).join("")}
-      </g>
-      <rect x="58" y="54" width="794" height="402" rx="18" fill="none" stroke="#d5cce8" stroke-width="2"/>
-      <polyline points="${primaryPoints}" fill="none" stroke="${primary}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      <polyline points="${secondaryPoints}" fill="none" stroke="${secondary}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-      <polyline points="${thirdPoints}" fill="none" stroke="#6f7f93" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.66"/>
-      <g font-family="Arial, sans-serif">
-        <text x="76" y="40" fill="#3b3152" font-size="22" font-weight="700">EEG 1 min / ${label}</text>
-        <text x="76" y="488" fill="#827690" font-size="16">0s</text>
-        <text x="800" y="488" fill="#827690" font-size="16">60s</text>
-        <text x="720" y="40" fill="#827690" font-size="16">alpha / beta / theta</text>
-      </g>
-    </svg>
-  `;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function makeWavePoints(seed: number, amplitude: number, frequency: number, baseline: number) {
-  return Array.from({ length: 110 }, (_, index) => {
-    const x = 76 + index * 7;
-    const y = baseline
-      + Math.sin((index + seed) * frequency) * amplitude
-      + Math.sin((index + seed) * 0.08) * 16
-      + Math.cos((index + seed) * 0.49) * 8;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-}

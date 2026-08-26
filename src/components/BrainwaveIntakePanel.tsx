@@ -255,7 +255,7 @@ export function BrainwaveIntakePanel({
           </h2>
           <p className="mt-1 text-xs leading-5 text-[#827690]">
             {customerName} のカルテ。iPad から書き出した CSV と測定画面のスクリーンショットを
-            紐づけます。CSV には7波形すべてを保管し、利用者向け画面にはリラックス・集中のみ出します。
+            紐づけます。CSV には7波形すべてを保管し、カルテにはリラックス度と集中度を並べます。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -314,7 +314,7 @@ export function BrainwaveIntakePanel({
               onChange={(event) => setShowInternalChannels(event.target.checked)}
               className="h-4 w-4 accent-[#8d6fd1]"
             />
-            α/β/γ/δ/θ の内部波形も表示（管理者向け）
+            α/β/γ/δ/θ のグラフも表示
           </label>
         </div>
 
@@ -415,8 +415,7 @@ export function BrainwaveIntakePanel({
 
                 {!showInternalChannels ? (
                   <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs text-[#665a78]">
-                    α/β/γ/δ/θ の5波形はCSVから取り込み済みで、カルテに保管されています。
-                    利用者向け画面には表示しません。
+                    α/β/γ/δ/θ の5波形も取り込み済みです。必要なときは上のチェックで開けます。
                   </p>
                 ) : null}
               </div>

@@ -14,6 +14,8 @@ export type AdminNavItem = {
   description: string;
   /** 未実装の画面には印を付け、動くものと区別できるようにする。 */
   status?: "ready" | "preparing";
+  /** 管理者だけに見せる画面。ナビからも隠す。 */
+  adminOnly?: boolean;
 };
 
 export const adminNavItems: AdminNavItem[] = [
@@ -72,13 +74,14 @@ export const adminNavItems: AdminNavItem[] = [
     icon: "BookOpen",
     description: "ベース＋追加オイルの組み合わせ例",
     status: "preparing",
+    adminOnly: true,
   },
   {
     href: "/operator/reports",
     label: "レポート出力",
     icon: "FileText",
     description: "利用者へ渡すレポートを書き出す",
-    status: "preparing",
+    status: "ready",
   },
   {
     href: "/operator/settings",
@@ -88,6 +91,11 @@ export const adminNavItems: AdminNavItem[] = [
     status: "ready",
   },
 ];
+
+/** ロールに応じて表示してよいナビ項目だけを返す。 */
+export function visibleNavItems(isAdmin: boolean): AdminNavItem[] {
+  return adminNavItems.filter((item) => !item.adminOnly || isAdmin);
+}
 
 /** パスから現在のナビ項目を判定する。より長い href を優先して一致させる。 */
 export function findActiveNavItem(pathname: string): AdminNavItem | undefined {
