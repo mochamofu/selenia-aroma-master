@@ -998,6 +998,16 @@ export default function OperatorKartePage() {
     setHearingSheetOverrides((current) => ({ ...current, [next.id]: next }));
   }
 
+  // 拡大表示は Esc でも閉じられるようにする。
+  useEffect(() => {
+    if (!viewerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setViewerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [viewerOpen]);
+
   /** グラフをダブルクリックしたとき。選択したうえで拡大表示を開く。 */
   function expandBrainwaveImage(imageId: string) {
     selectBrainwaveImage(imageId);
@@ -1901,8 +1911,18 @@ export default function OperatorKartePage() {
       ) : null}
 
       {viewerOpen && activeImage ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#211733]/78 p-4">
-          <div className="w-full max-w-6xl rounded-lg bg-white p-4 shadow-2xl">
+        // 画像の外側をクリックしても閉じる。拡大したまま操作が止まるのを避ける。
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-[#211733]/78 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="脳波画像 拡大表示"
+          onClick={() => setViewerOpen(false)}
+        >
+          <div
+            className="w-full max-w-6xl rounded-lg bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-[#7b7088]">脳波画像 拡大表示</p>

@@ -72,8 +72,8 @@ export const adminNavItems: AdminNavItem[] = [
     href: "/operator/recipes",
     label: "アロマレシピ",
     icon: "BookOpen",
-    description: "ベース＋追加オイルの組み合わせ例",
-    status: "preparing",
+    description: "よく使う組み合わせを型として登録する",
+    status: "ready",
     adminOnly: true,
   },
   {
