@@ -168,7 +168,7 @@ export function BrainwaveIntakePanel({
         nextTrialNo += 1;
       }
       const trialNo = trialNoBySource.get(item.sourceFileName)!;
-      // 位置からの割り当て。1枚目=リラックス度、2枚目=集中度。
+      // 位置からの割り当て。FocusCalm の画面はリラックス度が上、集中度が下。
       const positional: BrainwaveChannel = item.indexInSource === 1 ? "relax" : "focus";
       const channels = item.guessedChannels.length > 0 ? item.guessedChannels : [positional];
       return {
@@ -187,6 +187,7 @@ export function BrainwaveIntakePanel({
         scope: "trial",
         trialNo,
         trialLabel: `第${trialNo}回`,
+        score: null,
       };
     });
 

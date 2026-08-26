@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
+  BookOpen,
   BrainCircuit,
   CalendarDays,
   Check,
@@ -31,6 +32,13 @@ import {
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
 import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
+import { BrainwaveTrendChart, toTrendPoints } from "@/components/BrainwaveTrendChart";
+import {
+  loadRecipes,
+  saveRecipes,
+  totalVolumeUl,
+  type AromaRecipe,
+} from "@/lib/aromaRecipes";
 import {
   clearSessionDraft,
   loadSessionDraft,
@@ -556,6 +564,8 @@ function makePair(options: {
   measuredAt: string;
   uploadedAt: string;
   scope: ScreenshotScope;
+  relaxScore: number;
+  focusScore: number;
 }): BrainwaveScreenshot[] {
   const base = {
     customerId: options.customerId,
@@ -576,6 +586,7 @@ function makePair(options: {
       src: `/demo/brainwave/relax-${options.variant}.png`,
       channels: ["relax"],
       contentHash: `sample-${options.idPrefix}-relax`,
+      score: options.relaxScore,
     },
     {
       ...base,
@@ -584,6 +595,7 @@ function makePair(options: {
       src: `/demo/brainwave/focus-${options.variant}.png`,
       channels: ["focus"],
       contentHash: `sample-${options.idPrefix}-focus`,
+      score: options.focusScore,
     },
   ];
 }
@@ -599,6 +611,8 @@ const decidedScreenshots: BrainwaveScreenshot[] = operatorAromas.flatMap((record
     measuredAt: `${record.made_at} ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}`,
     uploadedAt: record.made_at,
     scope: "decided",
+    relaxScore: 58 + ((index * 7) % 25),
+    focusScore: 46 + ((index * 11) % 22),
   }),
 );
 
@@ -621,6 +635,8 @@ const pastDecidedScreenshots: BrainwaveScreenshot[] = clientsWithoutRecords.flat
       measuredAt: `${client.lastVisitAt} 15:${String((index * 13) % 60).padStart(2, "0")}`,
       uploadedAt: client.lastVisitAt,
       scope: "decided",
+      relaxScore: 55 + ((index * 9) % 28),
+      focusScore: 44 + ((index * 13) % 24),
     }),
 );
 
@@ -667,6 +683,9 @@ const trialScreenshots: BrainwaveScreenshot[] = operatorCustomers.flatMap((custo
       measuredAt: `${todaySessionDate} ${String(13 + Math.floor(index / 3)).padStart(2, "0")}:${String((index * 11) % 60).padStart(2, "0")}`,
       uploadedAt: todaySessionDate,
       scope: "trial",
+      // 通常は一方が上がると他方が下がる。5回目だけ両方が高い「ゾーン」の例。
+      relaxScore: index === 4 ? 81 : 42 + index * 6,
+      focusScore: index === 4 ? 78 : 74 - index * 5,
     }),
   ),
 );
@@ -761,6 +780,8 @@ export default function OperatorKartePage() {
   const [safetyNoteFormOpen, setSafetyNoteFormOpen] = useState(false);
   // ヒアリングシートの編集内容。元の回答は残し、上書き分だけを持つ。
   const [hearingSheetOverrides, setHearingSheetOverrides] = useState<Record<string, HearingSheet>>({});
+  // アロマレシピとの行き来。読み込むと配合欄に流し込み、保存すると型として残す。
+  const [recipePickerOpen, setRecipePickerOpen] = useState(false);
 
   const selectedCustomer = customers.find((customer) => customer.user_id === selectedCustomerId) ?? null;
   // 業務用の利用者情報（利用者番号・生年月日・禁忌）。利用者向けの Profile とは別データ。
@@ -1012,6 +1033,51 @@ export default function OperatorKartePage() {
   function expandBrainwaveImage(imageId: string) {
     selectBrainwaveImage(imageId);
     setViewerOpen(true);
+  }
+
+  /** 登録済みのレシピを配合欄へ流し込む。 */
+  function applyRecipe(recipe: AromaRecipe) {
+    history.commit("レシピの読み込み");
+    setSelectedBaseId(recipe.baseBlendId);
+    setAddedOils(
+      recipe.oils.map((oil, index) => ({
+        id: `recipe-oil-${Date.now()}-${index}`,
+        name: oil.name,
+        amountUl: String(oil.amountUl),
+      })),
+    );
+    setRecipePickerOpen(false);
+    setToast(`レシピ「${recipe.name}」を読み込みました。`);
+  }
+
+  /** いまの配合をレシピとして残す。 */
+  function saveCurrentAsRecipe() {
+    const oils = addedOils
+      .map((oil) => ({ name: oil.name, amountUl: parseVolumeUl(oil.amountUl) }))
+      .filter((oil) => oil.name && oil.amountUl > 0);
+    // 1行目はベースブレンドなので、追加精油からは外す。
+    const baseLabel = `${selectedBase.code} ${selectedBase.name}`;
+    const baseRow = oils.find((oil) => oil.name === baseLabel);
+    const recipe: AromaRecipe = {
+      id: `recipe-${Date.now()}`,
+      name: blendTitle || `${selectedBase.name} の型`,
+      baseBlendId: selectedBase.id,
+      baseAmountUl: baseRow?.amountUl ?? 3000,
+      oils: oils.filter((oil) => oil.name !== baseLabel),
+      purposeTags: selectedBase.benefits.slice(0, 2),
+      note: makerNote,
+      createdAt: new Date().toISOString().slice(0, 10),
+      outcome: { useCount: 0, relaxAverage: null, focusAverage: null },
+    };
+    saveRecipes([recipe, ...loadRecipes()]);
+    setToast(`「${recipe.name}」をアロマレシピに保存しました。`);
+  }
+
+  /** 測定画面の数値を控える。推移グラフはここに入れた値で描く。 */
+  function updateScore(imageId: string, score: number | null) {
+    setBrainwaveScreenshots((current) =>
+      current.map((shot) => (shot.id === imageId ? { ...shot, score } : shot)),
+    );
   }
 
   /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
@@ -1478,6 +1544,17 @@ export default function OperatorKartePage() {
                       </button>
                     </p>
                   ) : null}
+                  <div className="mt-4 rounded-lg border border-[#e4dff0] bg-[#faf8fe] p-3">
+                    <h3 className="text-sm font-bold text-[#342a49]">この日の推移</h3>
+                    <p className="mt-1 text-xs leading-5 text-[#827690]">
+                      各回の数値を入れると、リラックス度と集中度の動きが1枚で見えます。
+                      どちらも0〜100で、高いほどその状態が強く出ています。
+                    </p>
+                    <div className="mt-3">
+                      <BrainwaveTrendChart points={toTrendPoints(trialRows)} />
+                    </div>
+                  </div>
+
                   <div className="mt-4">
                     <BrainwaveTrialGrid
                       rows={trialRows}
@@ -1486,6 +1563,7 @@ export default function OperatorKartePage() {
                       onExpand={expandBrainwaveImage}
                       onRelabel={relabelTrial}
                       onSwap={swapTrialChannels}
+                      onScoreChange={updateScore}
                       emptyMessage="本日の測定はまだありません。下の「脳波データ取り込み」からiPadのスクリーンショットを読み込むと、1枚につき1回の測定として、リラックス度と集中度に切り分けて並びます。"
                     />
                   </div>
@@ -1713,18 +1791,36 @@ export default function OperatorKartePage() {
                           <label className="text-xs font-bold text-[#665a78]">配合レシピ</label>
                           <p className="mt-1 text-[11px] text-[#7b708d]">構成比: {ratioLabel || "-"}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const id = nextLocalId("oil");
-                            history.commit("材料の追加");
-                            setAddedOils((rows) => [...rows, { id, name: "ローマンカモミール", amountUl: "1000" }]);
-                          }}
-                          className="flex h-8 items-center gap-1 rounded-lg border border-[#ded7ec] px-2 text-xs font-bold text-[#8d6fd1]"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          追加
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setRecipePickerOpen(true)}
+                            className="flex h-8 items-center gap-1 rounded-lg border border-[#ded7ec] px-2 text-xs font-bold text-[#8d6fd1]"
+                          >
+                            <BookOpen className="h-3.5 w-3.5" />
+                            レシピから
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveCurrentAsRecipe}
+                            className="flex h-8 items-center gap-1 rounded-lg border border-[#ded7ec] px-2 text-xs font-bold text-[#8d6fd1]"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                            レシピへ保存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const id = nextLocalId("oil");
+                              history.commit("材料の追加");
+                              setAddedOils((rows) => [...rows, { id, name: "ローマンカモミール", amountUl: "1000" }]);
+                            }}
+                            className="flex h-8 items-center gap-1 rounded-lg border border-[#ded7ec] px-2 text-xs font-bold text-[#8d6fd1]"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            追加
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-2 space-y-2">
                         <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_30px] gap-2 px-1 text-[11px] font-bold text-[#7b708d]">
@@ -1910,6 +2006,13 @@ export default function OperatorKartePage() {
         </ModalShell>
       ) : null}
 
+      {recipePickerOpen ? (
+        <RecipePicker
+          onSelect={applyRecipe}
+          onClose={() => setRecipePickerOpen(false)}
+        />
+      ) : null}
+
       {viewerOpen && activeImage ? (
         // 画像の外側をクリックしても閉じる。拡大したまま操作が止まるのを避ける。
         <div
@@ -1939,6 +2042,101 @@ export default function OperatorKartePage() {
         </div>
       ) : null}
     </AdminShell>
+  );
+}
+
+/**
+ * 登録済みのアロマレシピから選ぶ。
+ * カルテの配合欄へそのまま流し込むための入口。
+ */
+function RecipePicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (recipe: AromaRecipe) => void;
+  onClose: () => void;
+}) {
+  const [recipes] = useState<AromaRecipe[]>(() => loadRecipes());
+  const [query, setQuery] = useState("");
+
+  const visible = recipes.filter((recipe) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [recipe.name, recipe.note, ...recipe.purposeTags, ...recipe.oils.map((oil) => oil.name)]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-[#211733]/78 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="アロマレシピから選ぶ"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[#e4dff0] p-4">
+          <div>
+            <h2 className="text-lg font-bold text-[#342a49]">アロマレシピから読み込む</h2>
+            <p className="mt-1 text-xs text-[#7b708d]">
+              選ぶと、ベースブレンドと追加精油が配合欄に入ります。
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="閉じる" className="grid h-9 w-9 place-items-center rounded-lg border border-[#ded7ec]">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="border-b border-[#e4dff0] p-4">
+          <div className="flex h-11 items-center gap-2 rounded-lg border border-[#ddd6ea] px-3">
+            <Search className="h-4 w-4 shrink-0 text-[#827690]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="レシピ名・精油名・場面で探す"
+              className="min-w-0 flex-1 bg-transparent text-base outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto p-4">
+          {visible.length === 0 ? (
+            <p className="p-6 text-center text-sm text-[#7f738d]">
+              {recipes.length === 0
+                ? "登録済みのレシピがありません。アロマレシピの画面から登録してください。"
+                : "条件に合うレシピがありません。"}
+            </p>
+          ) : (
+            visible.map((recipe) => {
+              const blend = demoBaseBlends.find((item) => item.id === recipe.baseBlendId);
+              return (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  onClick={() => onSelect(recipe)}
+                  className="w-full rounded-lg border border-[#e4dff0] p-3 text-left transition hover:border-[#8d6fd1]"
+                >
+                  <p className="text-sm font-bold text-[#3b3152]">{recipe.name}</p>
+                  <p className="mt-1 text-xs text-[#7b708d]">
+                    {blend ? `${blend.code} ${blend.name}` : "ベース未設定"}
+                    {recipe.oils.length > 0 ? ` ＋ ${recipe.oils.map((oil) => oil.name).join(" / ")}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-[#9a8caf]">
+                    合計 {(totalVolumeUl(recipe) / 1000).toFixed(1)}mL
+                    {recipe.outcome.useCount > 0 ? ` / 実績 ${recipe.outcome.useCount}回` : ""}
+                  </p>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

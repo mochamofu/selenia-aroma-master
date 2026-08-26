@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Check, Database, Lock, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, Database, Download, Lock, ShieldCheck, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useViewerRole } from "@/hooks/useViewerRole";
 import { DISCLOSURE_DESCRIPTIONS, DISCLOSURE_LABELS, disclosureLevelForRole } from "@/lib/disclosure";
@@ -12,6 +12,7 @@ import {
   subscribeOperatorSettings,
   type OperatorSettings,
 } from "@/lib/operatorSettings";
+import { BackupFormatError, buildBackup, countEntries, downloadBackup, restoreBackup } from "@/lib/backup";
 import { supabase } from "@/lib/supabaseClient";
 
 function Card({
@@ -108,6 +109,39 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
 
   const [settings, setSettings] = useState<OperatorSettings>(initialSettings);
   const [saved, setSaved] = useState(false);
+  const [backupMessage, setBackupMessage] = useState("");
+  const [backupError, setBackupError] = useState("");
+
+  function handleExport() {
+    setBackupError("");
+    const count = downloadBackup();
+    setBackupMessage(
+      count === 0
+        ? "書き出す内容がまだありません。"
+        : `${count} 件のデータをファイルに書き出しました。`,
+    );
+  }
+
+  async function handleImport(file: File) {
+    setBackupMessage("");
+    setBackupError("");
+    const current = countEntries(buildBackup());
+    if (current > 0) {
+      const ok = window.confirm(
+        `この端末に保存されている ${current} 件のデータは、読み込んだ内容で置き換わります。続けますか。`,
+      );
+      if (!ok) return;
+    }
+    try {
+      const restored = await restoreBackup(file);
+      setBackupMessage(`${restored} 件を読み込みました。反映するため画面を再読み込みします。`);
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (error) {
+      setBackupError(
+        error instanceof BackupFormatError ? error.message : "読み込みに失敗しました。",
+      );
+    }
+  }
 
   const update = <K extends keyof OperatorSettings>(key: K, value: OperatorSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -234,6 +268,55 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
           <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
             インストラクターの招待と権限付与は、Supabase の profiles.role をこの画面から変更できるように
             したうえで追加します。
+          </p>
+        </Card>
+
+        <Card
+          title="バックアップ"
+          description="いまの保存先はこの端末のブラウザだけです。ファイルに書き出しておくと、別の端末へ移したり、消えたときに戻したりできます。"
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="flex h-11 items-center gap-2 rounded-lg bg-[var(--admin-primary)] px-4 text-xs font-bold text-white transition hover:bg-[var(--admin-primary-strong)]"
+            >
+              <Download className="h-4 w-4" />
+              バックアップを書き出す
+            </button>
+            <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-[var(--admin-border)] px-4 text-xs font-bold transition hover:border-[var(--admin-primary)]">
+              <Upload className="h-4 w-4" />
+              バックアップを読み込む
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) handleImport(file);
+                }}
+              />
+            </label>
+          </div>
+
+          {backupMessage ? (
+            <p className="flex items-start gap-2 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-xs leading-5">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--admin-primary-strong)]" />
+              {backupMessage}
+            </p>
+          ) : null}
+          {backupError ? (
+            <p className="flex items-start gap-2 rounded-lg bg-[var(--admin-danger-soft)] p-3 text-xs font-bold leading-5 text-[var(--admin-danger)]">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {backupError}
+            </p>
+          ) : null}
+
+          <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
+            書き出したファイルには、設定・保存した本日のセッション・アロマレシピが入ります。
+            利用者の測定画像も含まれるため、扱いには注意してください。
+            読み込むと、この端末の内容は置き換わります。
           </p>
         </Card>
 
