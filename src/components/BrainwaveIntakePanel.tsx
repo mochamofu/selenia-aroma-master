@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Activity, AlertTriangle, Check, ImageUp, Trash2, Upload } from "lucide-react";
 import { BrainwaveChart } from "@/components/BrainwaveChart";
 import { BrainwaveCsvError, parseBrainwaveCsv } from "@/lib/brainwaveCsv";
-import { findUncoveredChannels, intakeScreenshots } from "@/lib/screenshotIntake";
+import { CAPTURE_ORDER, findUncoveredChannels, intakeScreenshotPanels } from "@/lib/screenshotIntake";
 import {
   BRAINWAVE_CHANNELS,
   BRAINWAVE_CHANNEL_META,
@@ -49,6 +49,7 @@ export function BrainwaveIntakePanel({
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [intakeSummary, setIntakeSummary] = useState<string | null>(null);
+  const [splitWarnings, setSplitWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const customerSessions = useMemo(
@@ -135,6 +136,7 @@ export function BrainwaveIntakePanel({
     if (files.length === 0) return;
 
     setBusy(true);
+    setSplitWarnings([]);
 
     const oversized = files.filter((file) => file.size > MAX_IMAGE_SIZE_BYTES);
     const usable = files.filter((file) => file.size <= MAX_IMAGE_SIZE_BYTES);
@@ -143,17 +145,18 @@ export function BrainwaveIntakePanel({
       .filter((shot) => shot.customerId === customerId)
       .map((shot) => shot.contentHash);
 
-    const result = await intakeScreenshots(usable, existingHashes);
+    // 1枚のスクリーンショットを上下2つのグラフへ切り分けてから取り込む
+    const result = await intakeScreenshotPanels(usable, existingHashes);
 
-    const added: BrainwaveScreenshot[] = result.accepted.map(({ file, analysis }) => ({
-      id: nextId("eeg-shot"),
+    const added: BrainwaveScreenshot[] = result.accepted.map((item) => ({
+      id: nextId("eeg-panel"),
       customerId,
-      title: file.name.replace(/\.[^.]+$/, ""),
-      src: URL.createObjectURL(file),
-      channels: analysis.guessedChannels,
-      detectionReason: analysis.detectionReason,
-      contentHash: analysis.contentHash,
-      measuredAt: new Date(file.lastModified).toISOString().slice(0, 16).replace("T", " "),
+      title: `${item.sourceFileName.replace(/\.[^.]+$/, "")}（${item.positionInSource}）`,
+      src: item.panel.objectUrl,
+      channels: item.guessedChannels,
+      detectionReason: item.detectionReason,
+      contentHash: item.contentHash,
+      measuredAt: new Date().toISOString().slice(0, 16).replace("T", " "),
       uploadedAt: new Date().toISOString().slice(0, 10),
       note: "",
       source: "upload",
@@ -163,16 +166,46 @@ export function BrainwaveIntakePanel({
       onScreenshotsChange((current) => [...added, ...current]);
     }
 
-    const parts = [`${added.length}枚を取り込みました`];
+    const parts = [`グラフ ${added.length}枚を切り出しました`];
     if (result.duplicates.length > 0) {
-      parts.push(`重複 ${result.duplicates.length}枚を自動で除外しました`);
+      parts.push(`重複 ${result.duplicates.length}枚を自動で除外`);
     }
     if (oversized.length > 0) parts.push(`10MB超 ${oversized.length}枚をスキップ`);
-    if (result.failures.length > 0) parts.push(`解析失敗 ${result.failures.length}枚`);
+    if (result.failures.length > 0) parts.push(`切り分け失敗 ${result.failures.length}枚`);
 
+    setSplitWarnings([
+      ...result.warnings,
+      ...result.failures.map((f) => `${f.fileName}: ${f.message}`),
+    ]);
     setIntakeSummary(parts.join(" / "));
     onToast(parts.join(" / "));
     setBusy(false);
+  }
+
+  /** 機器の表示順が固定なら、取り込んだ順に7波形を割り当てられる。 */
+  function assignByCaptureOrder() {
+    // 取り込み時に [...新しいバッチ, ...既存] の順で積むため、
+    // 直近に取り込んだ4枚分は配列の先頭から撮影順に並んでいる。
+    // ここを逆順にすると θ から割り当ててしまうので、並びはそのまま使う。
+    const inCaptureOrder = screenshots.filter((shot) => shot.customerId === customerId);
+    const assignment = new Map<string, BrainwaveChannel[]>();
+    inCaptureOrder.forEach((shot, index) => {
+      const channel = CAPTURE_ORDER[index];
+      assignment.set(shot.id, channel ? [channel] : []);
+    });
+
+    onScreenshotsChange((current) =>
+      current.map((shot) =>
+        assignment.has(shot.id)
+          ? {
+              ...shot,
+              channels: assignment.get(shot.id)!,
+              detectionReason: "撮影順から一括で割り当て",
+            }
+          : shot,
+      ),
+    );
+    onToast(`${Math.min(inCaptureOrder.length, CAPTURE_ORDER.length)}枚に撮影順で割り当てました。`);
   }
 
   function toggleScreenshotChannel(shotId: string, channel: BrainwaveChannel) {
@@ -240,7 +273,7 @@ export function BrainwaveIntakePanel({
           </label>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#d98aa8] px-3 text-xs font-bold text-white transition hover:bg-[#c87598]">
             <ImageUp className="h-4 w-4" />
-            スクショを一括取り込み
+            スクショ4枚を取り込む
             <input
               className="sr-only"
               type="file"
@@ -405,11 +438,36 @@ export function BrainwaveIntakePanel({
         </div>
 
         <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
-          4枚まとめて選択してください。画素を比較して同じグラフの重複は自動で除外します。
-          <strong className="font-bold">波形の種類はファイル名から推定するだけ</strong>なので、
-          各カードのタグを見て正しいものに直してください。CSVを取り込んでいる場合、
-          グラフの正データはCSV側が持ちます。
+          <strong className="font-bold">4枚まとめて選択してください。</strong>
+          1枚に2つ写っているグラフを自動で上下に切り分け、グラフごとの画像として保管します。
+          4枚 → 8枚のうち重複する1枚は自動で除外するので、7波形が残ります。
+          切り抜きの手作業は不要です。
+          <br />
+          <strong className="font-bold">波形の種類だけは自動で判別できません。</strong>
+          機器の表示順が毎回同じなら「撮影順で一括割り当て」が使えます。違う場合は各カードのタグで指定してください。
         </p>
+
+        {customerScreenshots.length > 0 ? (
+          <button
+            type="button"
+            onClick={assignByCaptureOrder}
+            className="flex h-9 items-center gap-2 rounded-lg border border-[#ddd6ea] bg-white px-3 text-xs font-bold text-[#4b3d6b] transition hover:border-[#8d6fd1]"
+          >
+            <Check className="h-3.5 w-3.5" />
+            撮影順で一括割り当て（リラックス → 集中 → α → β → γ → δ → θ）
+          </button>
+        ) : null}
+
+        {splitWarnings.length > 0 ? (
+          <ul className="space-y-1 rounded-lg bg-[#fdf3e3] p-3 text-xs text-[#8a6a35]">
+            {splitWarnings.map((warning) => (
+              <li key={warning} className="flex gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{warning}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         {uncoveredChannels.length > 0 && customerScreenshots.length > 0 ? (
           <p className="flex flex-wrap items-center gap-2 rounded-lg bg-[#fdf3e3] p-3 text-xs font-bold text-[#8a6a35]">
@@ -428,7 +486,7 @@ export function BrainwaveIntakePanel({
             {customerScreenshots.map((shot) => (
               <article key={shot.id} className="overflow-hidden rounded-lg border border-[#e4dff0]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={shot.src} alt={shot.title} className="h-32 w-full object-cover" />
+                <img src={shot.src} alt={shot.title} className="h-32 w-full bg-white object-contain" />
                 <div className="space-y-2 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate text-sm font-bold text-[#3b3152]">{shot.title}</p>
