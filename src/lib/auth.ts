@@ -14,28 +14,44 @@ const STORAGE_KEY = "aroma-demo-session";
 /**
  * デモモードのアカウント。
  *
- * 以前はメールに "admin" が入っているかどうかで管理者を決めていたが、
- * 社外の方に見ていただく際、その規則を知られると誰でも管理者になれてしまう。
- * 管理者はメールとパスワードの両方が一致したときだけにし、それ以外は
- * 認定インストラクターとして入る（内部配合比率は表示されない）。
+ * 登録した組み合わせに一致したときだけログインできる。以前はメールに "admin" を
+ * 含むかどうかで管理者を決め、それ以外は誰でも入れる作りだったため、URLを知って
+ * いれば無関係の人も入れてしまった。社外へ共有する前提で、メールとパスワードの
+ * 両方の一致を必須にしている。
  *
- * ここは画面確認用の仕組みで、本番では Supabase の認証を使う。
+ * ここは画面確認用の仕組みで、本番運用では正式な認証に置き換える。
+ * 共有相手を増やすときはこの表に行を足す。
+ *
+ * パスワードは口頭でも伝えられる長さにしている。試用段階の画面で、扱うのは
+ * 架空のデータだけであり、入力しにくさのほうが実害が大きいと判断した。
+ * 実データを扱う段階では、この仕組みごと正式な認証に置き換える。
  */
-const DEMO_ADMIN = {
-  email: "admin@selenia.local",
-  password: "selenia-admin",
-  userId: "user-admin",
+const DEMO_ACCOUNTS: Record<string, { password: string; role: UserRole; userId: string }> = {
+  // サロン管理者。内部配合比率まで表示される。
+  "admin@selenia": {
+    password: "selenia2026",
+    role: "admin",
+    userId: "user-admin",
+  },
+  // 社外共有用。内部配合比率は表示されない。
+  "partner@selenia": {
+    password: "selenia",
+    role: "instructor",
+    userId: "user-instructor",
+  },
 };
+
+export class DemoLoginError extends Error {}
 
 function resolveDemoAccount(
   email: string,
   password: string,
 ): { userId: string; role: UserRole } {
-  const isAdmin =
-    email.trim().toLowerCase() === DEMO_ADMIN.email && password === DEMO_ADMIN.password;
-  return isAdmin
-    ? { userId: DEMO_ADMIN.userId, role: "admin" }
-    : { userId: "user-instructor", role: "instructor" };
+  const account = DEMO_ACCOUNTS[email.trim().toLowerCase()];
+  if (!account || account.password !== password) {
+    throw new DemoLoginError("メールアドレスまたはパスワードが違います。");
+  }
+  return { userId: account.userId, role: account.role };
 }
 
 export type AuthSession = {
