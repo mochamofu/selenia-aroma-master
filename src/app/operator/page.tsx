@@ -1182,6 +1182,42 @@ export default function OperatorKartePage() {
     setSavedDrafts((drafts) => [draft, ...drafts]);
     setSelectedHistory({ kind: "draft", id: draft.id });
     setToast(`${selectedCustomer?.name ?? "利用者"}の香り制作記録を保存しました。`);
+
+    // 保存先（D1）があればそちらにも残す。未接続なら画面内の保持だけで従来どおり。
+    void persistBlendRecord(draft, madeAt);
+  }
+
+  /**
+   * 制作記録をサーバー側へ保存する。
+   * これまで画面の中だけに持っていたため、再読み込みで消えていた。
+   */
+  async function persistBlendRecord(draft: SavedDraft, madeAt: string) {
+    if (!selectedClient) return;
+    try {
+      const response = await fetch("/api/blend-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: selectedClient.id,
+          title: draft.title,
+          madeOn: madeAt,
+          baseBlendId: draft.baseBlendId,
+          totalVolumeMl: draft.totalVolumeMl,
+          lotNumber: "",
+          makerNote: draft.makerNote,
+          items: draft.formulaItems.map((item) => ({
+            name: item.name,
+            amountUl: parseVolumeUl(item.amountUl),
+          })),
+        }),
+      });
+      if (response.ok) {
+        setToast(`${selectedCustomer?.name ?? "利用者"}の香り制作記録を保存しました（サーバーに記録）。`);
+      }
+      // 503（未接続）と 401（未ログイン）は想定内。画面内の保持だけで続ける。
+    } catch {
+      // 通信できなくても、画面の操作は止めない。
+    }
   }
 
   function addCustomerKarte() {
