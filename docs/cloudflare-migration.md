@@ -44,7 +44,8 @@ Cloudflare 側が仕上がるまで両方に出せる。
 - [x] D1 のデータベースを作成し、`wrangler.jsonc` に登録
 - [ ] R2 のバケットを作成（画像の保存先。未作成）
 - [x] ログインを D1 のアカウントに置き換える
-- [ ] カルテ・測定・レシピの保存先を D1 と R2 に置き換える
+- [x] 利用者の保存先を D1 に置き換える
+- [ ] 測定・制作記録・レシピの保存先を D1 と R2 に置き換える
 - [ ] Vercel から切り替え
 - [ ] Supabase の依存を削除
 
@@ -95,6 +96,28 @@ npx wrangler d1 execute selenia-aroma --remote --file /tmp/op.sql
 
 パスワードが残るのはコマンドの履歴だけで、リポジトリにも SQL ファイルにも平文は入らない。
 `/tmp/op.sql` は流し終えたら消すこと。
+
+## 動作確認用のデモデータ
+
+利用者のデモデータを D1 へ入れる SQL を作れる。実在の方の情報はここから入れないこと。
+
+```bash
+node scripts/seed-clients.mjs > /tmp/clients.sql
+npx wrangler d1 execute selenia-aroma --local  --file /tmp/clients.sql   # 手元で確認
+npx wrangler d1 execute selenia-aroma --remote --file /tmp/clients.sql   # 本番へ
+```
+
+## 移行中の画面の振る舞い
+
+保存先が使えるかどうかで自動的に切り替わる。
+
+| 状態 | 画面 |
+|---|---|
+| D1 に利用者がいる | D1 の内容を表示する |
+| D1 が空、未接続、未ログイン | デモデータを表示し、「表示中はデモデータです」と出す |
+
+移行の途中でも画面が空にならないようにしている。切り替えのために画面側を
+触る必要はない。
 
 ## ログインの仕組み
 
