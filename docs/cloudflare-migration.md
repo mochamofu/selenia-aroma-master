@@ -79,6 +79,25 @@ npm run cf:preview
 npm run cf:deploy
 ```
 
+## 公開の自動化
+
+`main` に入った変更は GitHub Actions が Cloudflare へ反映する
+（`.github/workflows/deploy-cloudflare.yml`）。手元でコマンドを打つ必要はない。
+公開の前に型検査と lint を通し、壊れたものが出ないようにしている。
+
+動かすには GitHub の Secrets に2つ登録する。**登録は GitHub の画面から行い、
+値を他の場所に貼らないこと。**
+
+| 名前 | どこで手に入れるか |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → 「Edit Cloudflare Workers」テンプレート |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のダッシュボード右側、または Workers の画面に表示される |
+
+登録場所: GitHub のリポジトリ → Settings → Secrets and variables → Actions → New repository secret
+
+トークンには Workers / D1 / R2 を編集できる権限が要る。テンプレートを使い、
+D1 と R2 の権限を追加しておく。
+
 ## 施術者アカウントを作る
 
 パスワードは平文で保存しない。`scripts/create-operator.mjs` がハッシュ化した
