@@ -202,6 +202,7 @@ export default function OperatorBaseBlendsPage() {
     recipes,
     loading: recipesLoading,
     error: recipesError,
+    source: recipesSource,
   } = usePrivateBaseRecipes(canSeeInternal && showInternal);
   const ratiosVisible = canSeeInternal && showInternal && !recipesError;
   const openBlend = demoBaseBlends.find((blend) => blend.id === openBlendId) ?? null;
@@ -248,6 +249,11 @@ export default function OperatorBaseBlendsPage() {
         ) : null}
         {recipesLoading ? (
           <p className="rounded-xl bg-[var(--admin-primary-softer)] p-3.5 text-xs">内部比率を取得しています…</p>
+        ) : null}
+        {ratiosVisible && recipesSource === "demo" ? (
+          <p className="rounded-xl bg-[var(--admin-warning-soft)] p-3.5 text-xs font-bold leading-5 text-[var(--admin-warning)]">
+            表示中の内部配合比率はデモ用の架空データです。実際の配合ではありません。
+          </p>
         ) : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

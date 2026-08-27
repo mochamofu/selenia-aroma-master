@@ -15,8 +15,8 @@ import { isDemoModeEnabled } from "@/lib/supabaseClient";
  */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState(isDemoModeEnabled ? "admin@example.com" : "");
-  const [password, setPassword] = useState(isDemoModeEnabled ? "password" : "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -91,8 +91,7 @@ export default function LoginPage() {
 
         {isDemoModeEnabled ? (
           <p className="mt-4 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-center text-xs leading-5 text-[var(--admin-text-muted)]">
-            デモモードです。メールに <strong>admin</strong> を含めると管理者、
-            それ以外は一般ロールとしてログインします。
+            デモ表示用の画面です。表示されるデータはすべて架空のものです。
           </p>
         ) : null}
       </form>
