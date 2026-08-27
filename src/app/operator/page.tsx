@@ -647,17 +647,42 @@ const TODAY_TRIALS = [
   "②＋ベルガモット・フランキンセンス",
 ];
 
+/**
+ * カルテのヘッダーで足した注意事項を、ヒアリングシートの一覧に出せる形へ変換する。
+ *
+ * 定型文は `safetyFlagCatalog` の説明文を引き当て、自由入力はそのまま見出しにする。
+ * 追加した内容が下の一覧に出ないと、その方の注意事項をまとめて確認できないため。
+ */
+function toSafetyFlag(note: string): SafetyFlag {
+  const catalog = Object.values(safetyFlagCatalog);
+  const matched =
+    catalog.find((flag) => flag.label === note) ??
+    catalog.find((flag) => note.includes(flag.label) || flag.label.includes(note));
+  return {
+    id: `karte-${note}`,
+    label: note,
+    severity: matched?.severity ?? "注意",
+    guidance:
+      matched?.guidance ??
+      "カルテで追加した確認事項です。該当する場合は香りの強さと使い方を確認し、必要なら専門家へ相談してください。",
+  };
+}
+
 /** 注意事項の入力を早くするための定型文。自由入力もできる。 */
 const SAFETY_NOTE_PRESETS = [
+  // 前半は safetyFlagCatalog と同じ見出しにしてある。こうしておくと、
+  // 下の一覧に出したときに用意済みの説明文がそのまま引き当たる。
   "妊娠中",
-  "授乳中",
+  "出産直後",
   "妊活中",
-  "高血圧の既往あり",
-  "低血圧",
+  "授乳中",
+  "高血圧・循環器系の既往",
   "喘息・アレルギー傾向",
   "服薬中",
   "敏感肌・皮膚トラブル",
-  "てんかんの既往あり",
+  // ここから下は説明文を持たない。汎用の文面が付く。
+  "低血圧",
+  "てんかんの既往",
   "柑橘系の香りが苦手",
 ];
 
@@ -821,6 +846,8 @@ export default function OperatorKartePage() {
   const activeHistory = getActiveHistory(selectedHistory, customerRecords, customerDrafts);
   const baseSafetyNotes = selectedClient?.safetyNotes ?? [];
   const safetyNotes = safetyNoteOverrides[selectedCustomerId] ?? baseSafetyNotes;
+  // ヒアリングシートの一覧にも同じ内容を出す。カルテで足した分が見えないと確認漏れになる。
+  const karteSafetyFlags = safetyNotes.map(toSafetyFlag);
   const storedHearingSheet = getActiveHearingSheet(activeHistory);
   const activeHearingSheet = storedHearingSheet
     ? hearingSheetOverrides[storedHearingSheet.id] ?? storedHearingSheet
@@ -1603,7 +1630,12 @@ export default function OperatorKartePage() {
                   </div>
                   <HistoryDetail history={activeHistory} />
                   <div className="mt-4">
-                    <HearingSheetPanel sheet={activeHearingSheet} onChange={updateHearingSheet} />
+                    <HearingSheetPanel
+                      sheet={activeHearingSheet}
+                      onChange={updateHearingSheet}
+                      karteFlags={karteSafetyFlags}
+                      onRemoveKarteFlag={removeSafetyNote}
+                    />
                   </div>
                 </section>
                 ) : null}
@@ -2419,9 +2451,14 @@ function HistoryDetail({ history }: { history: ReturnType<typeof getActiveHistor
 function HearingSheetPanel({
   sheet,
   onChange,
+  karteFlags,
+  onRemoveKarteFlag,
 }: {
   sheet: HearingSheet | null;
   onChange: (patch: Partial<HearingSheet>, label: string) => void;
+  /** カルテのヘッダーで足した注意事項。 */
+  karteFlags: SafetyFlag[];
+  onRemoveKarteFlag: (note: string) => void;
 }) {
   if (!sheet) {
     return (
@@ -2484,11 +2521,21 @@ function HearingSheetPanel({
       <div className="mt-4 rounded-lg border border-[#ead7bb] bg-[#fffaf0] p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-[#795f32]">禁忌・注意事項</p>
-          <span className="text-[11px] font-bold text-[#9a6d2d]">{sheet.safetyFlags.length}件</span>
+          <span className="text-[11px] font-bold text-[#9a6d2d]">
+            {sheet.safetyFlags.length + karteFlags.length}件
+          </span>
         </div>
-        {sheet.safetyFlags.length > 0 ? (
+        {sheet.safetyFlags.length + karteFlags.length > 0 ? (
           <div className="mt-2 space-y-2">
             {sheet.safetyFlags.map((flag) => <SafetyFlagCard key={flag.id} flag={flag} />)}
+            {karteFlags.map((flag) => (
+              <SafetyFlagCard
+                key={flag.id}
+                flag={flag}
+                origin="カルテで追加"
+                onRemove={() => onRemoveKarteFlag(flag.label)}
+              />
+            ))}
           </div>
         ) : (
           <p className="mt-2 text-xs leading-5 text-[#795f32]">該当フラグなし。香りの強さ、既往歴、当日の体調を確認しながら低濃度から扱います。</p>
@@ -2561,7 +2608,16 @@ function ResponseBlock({
   );
 }
 
-function SafetyFlagCard({ flag }: { flag: SafetyFlag }) {
+function SafetyFlagCard({
+  flag,
+  origin,
+  onRemove,
+}: {
+  flag: SafetyFlag;
+  /** 回答由来か、カルテで足したものかを見分けるための表示。 */
+  origin?: string;
+  onRemove?: () => void;
+}) {
   const tone = flag.severity === "要確認"
     ? "border-[#e5c6aa] bg-white text-[#8c4f24]"
     : "border-[#ead7bb] bg-white text-[#795f32]";
@@ -2570,6 +2626,21 @@ function SafetyFlagCard({ flag }: { flag: SafetyFlag }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-[#fff5e4] px-2 py-1 text-[11px] font-bold">{flag.severity}</span>
         <p className="text-sm font-bold">{flag.label}</p>
+        {origin ? (
+          <span className="rounded-md border border-current px-1.5 py-0.5 text-[10px] font-bold opacity-70">
+            {origin}
+          </span>
+        ) : null}
+        {onRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`${flag.label} を外す`}
+            className="ml-auto opacity-60 transition hover:opacity-100"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
       <p className="mt-2 text-xs leading-5">{flag.guidance}</p>
     </div>
