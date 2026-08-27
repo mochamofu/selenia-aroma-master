@@ -21,17 +21,21 @@ const STORAGE_KEY = "aroma-demo-session";
  *
  * ここは画面確認用の仕組みで、本番運用では正式な認証に置き換える。
  * 共有相手を増やすときはこの表に行を足す。
+ *
+ * パスワードは口頭でも伝えられる長さにしている。試用段階の画面で、扱うのは
+ * 架空のデータだけであり、入力しにくさのほうが実害が大きいと判断した。
+ * 実データを扱う段階では、この仕組みごと正式な認証に置き換える。
  */
 const DEMO_ACCOUNTS: Record<string, { password: string; role: UserRole; userId: string }> = {
   // サロン管理者。内部配合比率まで表示される。
-  "admin@selenia.local": {
-    password: "sln-5w7e4tr604",
+  "admin@selenia": {
+    password: "selenia2026",
     role: "admin",
     userId: "user-admin",
   },
   // 社外共有用。内部配合比率は表示されない。
-  "partner@selenia.local": {
-    password: "gb-xbjitln0vv",
+  "partner@selenia": {
+    password: "selenia",
     role: "instructor",
     userId: "user-instructor",
   },
