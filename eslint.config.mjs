@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Cloudflare 向けのビルド成果物。生成物なので検査しない。
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 
