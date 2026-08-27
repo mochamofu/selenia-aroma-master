@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Droplet, Search, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { essentialOils } from "@/data/essentialOils";
+import { SCENT_FAMILIES, scentFamilyOf } from "@/data/scentFamilies";
 import { useViewerRole } from "@/hooks/useViewerRole";
 import { canDisclose, disclosureLevelForRole } from "@/lib/disclosure";
 import type { EssentialOil } from "@/types/aroma";
@@ -47,7 +48,9 @@ function OilDetail({ oil, onClose }: { oil: EssentialOil; onClose: () => void })
       <div className="space-y-5 px-5 py-5">
         <div
           className="h-20 rounded-xl"
-          style={{ background: `linear-gradient(135deg, ${oil.color}, #ffffff)` }}
+          style={{
+            background: `linear-gradient(135deg, ${scentFamilyOf(oil.slug).color}, #ffffff)`,
+          }}
         />
 
         <section>
@@ -103,6 +106,7 @@ export default function OperatorOilsPage() {
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string>("all");
   const [mood, setMood] = useState<string>("all");
+  const [family, setFamily] = useState<string>("all");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -113,9 +117,10 @@ export default function OperatorOilsPage() {
         `${oil.name} ${oil.botanical_name} ${oil.family} ${oil.scent_profile}`.toLowerCase().includes(q);
       const matchesNote = note === "all" || oil.scent_note === note;
       const matchesMood = mood === "all" || oil.mood_slugs.includes(mood);
-      return matchesQuery && matchesNote && matchesMood;
+      const matchesFamily = family === "all" || scentFamilyOf(oil.slug).slug === family;
+      return matchesQuery && matchesNote && matchesMood && matchesFamily;
     });
-  }, [query, note, mood]);
+  }, [query, note, mood, family]);
 
   const selected = essentialOils.find((oil) => oil.slug === selectedSlug) ?? null;
 
@@ -154,6 +159,20 @@ export default function OperatorOilsPage() {
               </select>
 
               <select
+                value={family}
+                onChange={(event) => setFamily(event.target.value)}
+                aria-label="香りの系統で絞り込む"
+                className="h-10 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 text-sm outline-none"
+              >
+                <option value="all">系統: すべて</option>
+                {SCENT_FAMILIES.map((item) => (
+                  <option key={item.slug} value={item.slug}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 value={mood}
                 onChange={(event) => setMood(event.target.value)}
                 aria-label="目的で絞り込む"
@@ -167,9 +186,40 @@ export default function OperatorOilsPage() {
               </select>
             </div>
 
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {SCENT_FAMILIES.map((item) => {
+                const count = essentialOils.filter(
+                  (oil) => scentFamilyOf(oil.slug).slug === item.slug,
+                ).length;
+                const active = family === item.slug;
+                return (
+                  <button
+                    key={item.slug}
+                    type="button"
+                    onClick={() => setFamily(active ? "all" : item.slug)}
+                    title={item.description}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold transition ${
+                      active
+                        ? "border-transparent text-white"
+                        : "border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:border-[var(--admin-primary)]"
+                    }`}
+                    style={active ? { background: item.color } : undefined}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: active ? "#ffffff" : item.color }}
+                      aria-hidden
+                    />
+                    {item.label}
+                    <span className="opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
               全 {essentialOils.length} 種のうち {filtered.length} 種を表示中。
-              行を選ぶと右側に詳細が出ます。
+              行を選ぶと右側に詳細が出ます。系統のボタンで絞り込めます。
             </p>
           </section>
 
@@ -184,6 +234,7 @@ export default function OperatorOilsPage() {
                   <thead>
                     <tr className="border-b border-[var(--admin-border)] bg-[var(--admin-primary-softer)] text-left">
                       <th scope="col" className="px-4 py-3 font-bold">精油名</th>
+                      <th scope="col" className="px-4 py-3 font-bold">系統</th>
                       <th scope="col" className="px-4 py-3 font-bold">学名 / 科</th>
                       <th scope="col" className="px-4 py-3 font-bold">ノート</th>
                       <th scope="col" className="px-4 py-3 font-bold">香りの印象</th>
@@ -203,12 +254,28 @@ export default function OperatorOilsPage() {
                       >
                         <td className="px-4 py-3">
                           <span className="flex items-center gap-2.5">
+                            {/* 左端の帯で香りの系統が分かるようにする */}
+                            <span
+                              className="h-7 w-1.5 shrink-0 rounded-full"
+                              style={{ background: scentFamilyOf(oil.slug).color }}
+                              aria-hidden
+                            />
                             <span
                               className="h-7 w-7 shrink-0 rounded-lg"
-                              style={{ background: `linear-gradient(135deg, ${oil.color}, #ffffff)` }}
+                              style={{
+                                background: `linear-gradient(135deg, ${scentFamilyOf(oil.slug).color}, #ffffff)`,
+                              }}
                               aria-hidden
                             />
                             <span className="font-bold">{oil.name}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="rounded-full px-2.5 py-1 text-xs font-bold text-white"
+                            style={{ background: scentFamilyOf(oil.slug).color }}
+                          >
+                            {scentFamilyOf(oil.slug).label}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-[var(--admin-text-muted)]">

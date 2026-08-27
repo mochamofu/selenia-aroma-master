@@ -70,11 +70,19 @@ function BaseBlendDetail({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal="true">
-      <button type="button" className="flex-1 cursor-default" aria-label="閉じる" onClick={onClose} />
-      <div className="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-[var(--admin-surface)] shadow-xl">
+    // 画面中央に出す。右端に寄せると、一覧と詳細のどちらを見ているのか分かりにくい。
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-y-auto rounded-xl bg-[var(--admin-surface)] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div
-          className="flex items-start justify-between gap-3 p-5 text-white"
+          className="flex items-start justify-between gap-3 rounded-t-xl p-5 text-white"
           style={{ background: `linear-gradient(135deg, ${blend.color}, #a08bc9)` }}
         >
           <div className="min-w-0">
