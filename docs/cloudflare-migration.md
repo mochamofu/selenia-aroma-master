@@ -28,8 +28,9 @@ Cloudflare 側が仕上がるまで両方に出せる。
 - [x] Next.js を 16.3.3 へ更新（`@opennextjs/cloudflare` の対応範囲に合わせる）
 - [x] `open-next.config.ts` と `wrangler.jsonc` を追加
 - [x] D1 のスキーマを用意（`db/migrations/0001_init.sql`）
-- [ ] Cloudflare 側でリソースを作成（下記「作成する手順」）
-- [ ] ログインを D1 のアカウントに置き換える
+- [x] D1 のデータベースを作成し、`wrangler.jsonc` に登録
+- [ ] R2 のバケットを作成（画像の保存先。未作成）
+- [x] ログインを D1 のアカウントに置き換える
 - [ ] カルテ・測定・レシピの保存先を D1 と R2 に置き換える
 - [ ] Vercel から切り替え
 - [ ] Supabase の依存を削除
@@ -62,6 +63,36 @@ npm run cf:preview
 # 7. 公開
 npm run cf:deploy
 ```
+
+## 施術者アカウントを作る
+
+パスワードは平文で保存しない。`scripts/create-operator.mjs` がハッシュ化した
+INSERT 文を作るので、その出力を D1 へ流す。
+
+```bash
+# 管理者を1人作る
+node scripts/create-operator.mjs "admin@selenia" "<パスワード>" "小杉 英之" admin > /tmp/op.sql
+npx wrangler d1 execute selenia-aroma --remote --file /tmp/op.sql
+
+# 各地の施術者を足す
+node scripts/create-operator.mjs "<メール>" "<パスワード>" "<氏名>" instructor > /tmp/op.sql
+npx wrangler d1 execute selenia-aroma --remote --file /tmp/op.sql
+```
+
+パスワードが残るのはコマンドの履歴だけで、リポジトリにも SQL ファイルにも平文は入らない。
+`/tmp/op.sql` は流し終えたら消すこと。
+
+## ログインの仕組み
+
+- Cookie に入れるのはセッションIDだけ。ロールなどの判断材料は毎回サーバー側で引き直す。
+  Cookie を書き換えても権限は変わらない。
+- Cookie は HttpOnly。ブラウザの JavaScript からは読めない。
+- パスワードは PBKDF2（SHA-256、10万回）でハッシュ化して保存する。
+- 有効期間は14日。期限切れのセッションは参照時に削除する。
+- メールが無い場合とパスワードが違う場合で応答を変えない。存在するメールを
+  探る手がかりにさせないため。
+- D1 が使えない環境（移行前の Vercel など）ではこの経路が 503 を返し、
+  従来のデモ用アカウントへ落ちる。移行が終わるまでどちらの環境でも動く。
 
 ## ドメイン
 
