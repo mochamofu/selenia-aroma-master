@@ -19,7 +19,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import { adminNavItems, findActiveNavItem, type AdminNavItem } from "@/lib/adminNav";
+import { findActiveNavItem, visibleNavItems, type AdminNavItem } from "@/lib/adminNav";
 import { DISCLOSURE_LABELS, disclosureLevelForRole } from "@/lib/disclosure";
 import { useViewerRole } from "@/hooks/useViewerRole";
 
@@ -91,8 +91,9 @@ export function AdminShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { role } = useViewerRole();
 
+  const navItems = visibleNavItems(role === "admin");
   const activeItem = findActiveNavItem(pathname);
-  const heading = title ?? activeItem?.label ?? "顧客カルテ";
+  const heading = title ?? activeItem?.label ?? "利用者カルテ";
   const description = subtitle ?? activeItem?.description ?? "";
   const disclosureLabel = DISCLOSURE_LABELS[disclosureLevelForRole(role)];
 
@@ -117,7 +118,7 @@ export function AdminShell({
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="管理メニュー">
-          {adminNavItems.map((item) => {
+          {navItems.map((item) => {
             const active = activeItem?.href === item.href;
             if (sidebarCollapsed) {
               return (
@@ -171,7 +172,7 @@ export function AdminShell({
               </span>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="管理メニュー">
-              {adminNavItems.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.href}
                   item={item}

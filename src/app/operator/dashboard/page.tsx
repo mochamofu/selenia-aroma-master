@@ -77,7 +77,7 @@ export default function OperatorDashboardPage() {
       <div className="space-y-5 p-4 lg:p-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="登録顧客"
+            label="登録利用者"
             value={operatorClients.length}
             unit="名"
             icon={<Users className="h-5 w-5" />}
@@ -107,12 +107,17 @@ export default function OperatorDashboardPage() {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]">
             <div className="flex items-center justify-between border-b border-[var(--admin-border)] px-5 py-4">
-              <h2 className="text-base font-bold">最近の来店</h2>
+              <div>
+                <h2 className="text-base font-bold">最近の来店</h2>
+                <p className="mt-0.5 text-xs text-[var(--admin-text-muted)]">
+                  画面に氏名は出しません。行を押すとその方のカルテが開きます。
+                </p>
+              </div>
               <Link
                 href="/operator/customers"
                 className="flex items-center gap-1 text-xs font-bold text-[var(--admin-primary-strong)]"
               >
-                顧客一覧
+                利用者一覧
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -121,7 +126,7 @@ export default function OperatorDashboardPage() {
               <table className="w-full min-w-[560px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[var(--admin-border)] bg-[var(--admin-primary-softer)] text-left">
-                    <th scope="col" className="px-5 py-2.5 font-bold">顧客</th>
+                    <th scope="col" className="px-5 py-2.5 font-bold">利用者番号</th>
                     <th scope="col" className="px-5 py-2.5 font-bold">属性</th>
                     <th scope="col" className="px-5 py-2.5 text-right font-bold">測定</th>
                     <th scope="col" className="px-5 py-2.5 font-bold">最終来店</th>
@@ -136,23 +141,18 @@ export default function OperatorDashboardPage() {
                         className="border-b border-[var(--admin-border)] transition last:border-b-0 hover:bg-[var(--admin-primary-softer)]"
                       >
                         <td className="px-5 py-3">
-                          <Link href="/operator" className="flex items-center gap-2.5">
-                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--admin-primary-soft)] text-xs font-bold text-[var(--admin-primary-strong)]">
-                              {client.name.slice(0, 1)}
+                          <Link href={`/operator?client=${client.id}`} className="flex items-center gap-2.5">
+                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--admin-primary-soft)] text-[var(--admin-primary-strong)]">
+                              <ClipboardList className="h-4 w-4" />
                             </span>
-                            <span>
-                              <span className="flex items-center gap-1.5 font-bold">
-                                {client.name}
-                                {client.safetyNotes.length > 0 ? (
-                                  <AlertTriangle
-                                    className="h-3.5 w-3.5 text-[var(--admin-warning)]"
-                                    aria-label="事前確認が必要"
-                                  />
-                                ) : null}
-                              </span>
-                              <span className="block text-xs text-[var(--admin-text-muted)]">
-                                {client.clientNumber}
-                              </span>
+                            <span className="flex items-center gap-1.5 font-bold">
+                              {client.clientNumber}
+                              {client.safetyNotes.length > 0 ? (
+                                <AlertTriangle
+                                  className="h-3.5 w-3.5 text-[var(--admin-warning)]"
+                                  aria-label="事前確認が必要"
+                                />
+                              ) : null}
                             </span>
                           </Link>
                         </td>
@@ -174,8 +174,8 @@ export default function OperatorDashboardPage() {
               <h2 className="text-base font-bold">よく使う画面</h2>
               <div className="mt-3 grid gap-2">
                 {[
-                  { href: "/operator", label: "顧客カルテ", icon: <ClipboardList className="h-4 w-4" /> },
-                  { href: "/operator/customers", label: "顧客一覧", icon: <Users className="h-4 w-4" /> },
+                  { href: "/operator", label: "利用者カルテ", icon: <ClipboardList className="h-4 w-4" /> },
+                  { href: "/operator/customers", label: "利用者一覧", icon: <Users className="h-4 w-4" /> },
                   { href: "/operator/base-blends", label: "ベースブレンド一覧", icon: <Layers className="h-4 w-4" /> },
                   { href: "/operator/oils", label: "エッセンシャルオイル一覧", icon: <Droplet className="h-4 w-4" /> },
                 ].map((item) => (
@@ -210,12 +210,14 @@ export default function OperatorDashboardPage() {
               <section className="rounded-xl border border-[var(--admin-warning)]/30 bg-[var(--admin-warning-soft)] p-5">
                 <h2 className="flex items-center gap-2 text-base font-bold text-[var(--admin-warning)]">
                   <AlertTriangle className="h-4 w-4" />
-                  事前確認が必要な顧客
+                  事前確認が必要な利用者
                 </h2>
                 <ul className="mt-3 space-y-2.5">
                   {flagged.map((client) => (
                     <li key={client.id} className="text-sm leading-5">
-                      <span className="font-bold">{client.name}</span>
+                      <Link href={`/operator?client=${client.id}`} className="font-bold underline-offset-2 hover:underline">
+                        {client.clientNumber}
+                      </Link>
                       <span className="block text-xs text-[var(--admin-text-muted)]">
                         {client.safetyNotes.join(" / ")}
                       </span>

@@ -5,11 +5,38 @@ import type { UserRole } from "@/types/profile";
 
 /**
  * 管理者・施術者向けアプリの認証。
- * 利用者（購入者）向けアプリは別リポジトリのため、顧客専用のゲスト
+ * 利用者（購入者）向けアプリは別リポジトリのため、利用者専用のゲスト
  * セッション生成やロール振り分けはここには置かない。
  */
 
 const STORAGE_KEY = "aroma-demo-session";
+
+/**
+ * デモモードのアカウント。
+ *
+ * 以前はメールに "admin" が入っているかどうかで管理者を決めていたが、
+ * 社外の方に見ていただく際、その規則を知られると誰でも管理者になれてしまう。
+ * 管理者はメールとパスワードの両方が一致したときだけにし、それ以外は
+ * 認定インストラクターとして入る（内部配合比率は表示されない）。
+ *
+ * ここは画面確認用の仕組みで、本番では Supabase の認証を使う。
+ */
+const DEMO_ADMIN = {
+  email: "admin@selenia.local",
+  password: "selenia-admin",
+  userId: "user-admin",
+};
+
+function resolveDemoAccount(
+  email: string,
+  password: string,
+): { userId: string; role: UserRole } {
+  const isAdmin =
+    email.trim().toLowerCase() === DEMO_ADMIN.email && password === DEMO_ADMIN.password;
+  return isAdmin
+    ? { userId: DEMO_ADMIN.userId, role: "admin" }
+    : { userId: "user-instructor", role: "instructor" };
+}
 
 export type AuthSession = {
   userId: string;
@@ -41,12 +68,10 @@ export async function signInWithEmail(email: string, password: string) {
     throw new Error("Supabaseの環境変数が未設定です。管理者に確認してください。");
   }
 
-  // デモモードでは、メールに admin を含むかどうかでロールを決める。
-  const role: UserRole = email.includes("admin") ? "admin" : "instructor";
-  const userId = role === "admin" ? "user-admin" : "user-instructor";
-  const session: AuthSession = { userId, email, role };
+  const account = resolveDemoAccount(email, password);
+  const session: AuthSession = { userId: account.userId, email, role: account.role };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  return { user: { id: userId, email }, role };
+  return { user: { id: account.userId, email }, role: account.role };
 }
 
 export async function signOut() {

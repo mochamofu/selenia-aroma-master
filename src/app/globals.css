@@ -143,3 +143,33 @@ textarea.field-input {
     transition-duration: 0.01ms !important;
   }
 }
+
+/**
+ * レポート出力の印刷指定。
+ *
+ * 画面の枠（サイドバー・ヘッダー・操作パネル）は紙に出さず、
+ * #report-sheet だけを1枚として印刷する。PDF化はOSの「PDFとして保存」を使う。
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #report-sheet,
+  #report-sheet * {
+    visibility: visible;
+  }
+
+  #report-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

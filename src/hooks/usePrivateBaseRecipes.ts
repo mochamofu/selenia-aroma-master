@@ -12,9 +12,11 @@ type FetchState = {
   error: string | null;
   /** 実際に内部比率を保持しているか。 */
   unlocked: boolean;
+  /** デモ用の架空データか、Supabase の実データか。 */
+  source: "demo" | "supabase" | null;
 };
 
-const IDLE: FetchState = { recipes: {}, loading: false, error: null, unlocked: false };
+const IDLE: FetchState = { recipes: {}, loading: false, error: null, unlocked: false, source: null };
 
 /**
  * ベースブレンドの内部配合比率を取得する。
@@ -53,6 +55,7 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
             error:
               typeof body?.error === "string" ? body.error : "内部配合比率を取得できませんでした。",
             unlocked: false,
+            source: null,
           });
           return;
         }
@@ -62,7 +65,13 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
           recipes[recipe.baseBlendId] = { ratio: recipe.internalRatio, note: recipe.privateNote };
         }
 
-        setState({ recipes, loading: false, error: null, unlocked: true });
+        setState({
+          recipes,
+          loading: false,
+          error: null,
+          unlocked: true,
+          source: body.source === "supabase" ? "supabase" : "demo",
+        });
       } catch (error) {
         if (cancelled) return;
         setState({
@@ -70,6 +79,7 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
           loading: false,
           error: error instanceof Error ? error.message : "内部配合比率を取得できませんでした。",
           unlocked: false,
+          source: null,
         });
       }
     }

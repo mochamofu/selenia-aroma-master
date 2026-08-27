@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Activity, AlertTriangle, Check, ImageUp, Trash2, Upload } from "lucide-react";
 import { BrainwaveChart } from "@/components/BrainwaveChart";
 import { BrainwaveCsvError, parseBrainwaveCsv } from "@/lib/brainwaveCsv";
-import { findUncoveredChannels, intakeScreenshots } from "@/lib/screenshotIntake";
+import { CAPTURE_ORDER, findUncoveredChannels, intakeScreenshotPanels } from "@/lib/screenshotIntake";
 import {
   BRAINWAVE_CHANNELS,
   BRAINWAVE_CHANNEL_META,
@@ -27,6 +27,8 @@ type BrainwaveIntakePanelProps = {
     updater: (screenshots: BrainwaveScreenshot[]) => BrainwaveScreenshot[],
   ) => void;
   onToast: (message: string) => void;
+  /** 元に戻せるよう、状態を変える直前に呼ぶ。 */
+  onCommitHistory: (label: string) => void;
 };
 
 function formatSigned(value: number): string {
@@ -42,6 +44,7 @@ export function BrainwaveIntakePanel({
   onSessionsChange,
   onScreenshotsChange,
   onToast,
+  onCommitHistory,
 }: BrainwaveIntakePanelProps) {
   const idCounter = useRef(0);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -49,6 +52,7 @@ export function BrainwaveIntakePanel({
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [intakeSummary, setIntakeSummary] = useState<string | null>(null);
+  const [splitWarnings, setSplitWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const customerSessions = useMemo(
@@ -135,6 +139,7 @@ export function BrainwaveIntakePanel({
     if (files.length === 0) return;
 
     setBusy(true);
+    setSplitWarnings([]);
 
     const oversized = files.filter((file) => file.size > MAX_IMAGE_SIZE_BYTES);
     const usable = files.filter((file) => file.size <= MAX_IMAGE_SIZE_BYTES);
@@ -143,36 +148,92 @@ export function BrainwaveIntakePanel({
       .filter((shot) => shot.customerId === customerId)
       .map((shot) => shot.contentHash);
 
-    const result = await intakeScreenshots(usable, existingHashes);
+    // 1枚のスクリーンショットに写っているグラフカードを切り出してから取り込む
+    const result = await intakeScreenshotPanels(usable, existingHashes);
+    if (result.accepted.length > 0) onCommitHistory("スクリーンショットの取り込み");
 
-    const added: BrainwaveScreenshot[] = result.accepted.map(({ file, analysis }) => ({
-      id: nextId("eeg-shot"),
-      customerId,
-      title: file.name.replace(/\.[^.]+$/, ""),
-      src: URL.createObjectURL(file),
-      channels: analysis.guessedChannels,
-      detectionReason: analysis.detectionReason,
-      contentHash: analysis.contentHash,
-      measuredAt: new Date(file.lastModified).toISOString().slice(0, 16).replace("T", " "),
-      uploadedAt: new Date().toISOString().slice(0, 10),
-      note: "",
-      source: "upload",
-    }));
+    // 取り込むスクショは1枚が1回の測定。写っている2枚のグラフを同じ回としてまとめる。
+    // 実機の並びはリラックス度と集中度で固定なので、位置から割り当てておき、
+    // 逆だった場合は行ごとの「左右を入れ替える」で直せるようにする。
+    let nextTrialNo =
+      screenshots
+        .filter((shot) => shot.customerId === customerId && shot.scope === "trial")
+        .reduce((max, shot) => Math.max(max, shot.trialNo), 0) + 1;
+    const trialNoBySource = new Map<string, number>();
+    const measuredAt = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+    const added: BrainwaveScreenshot[] = result.accepted.map((item) => {
+      if (!trialNoBySource.has(item.sourceFileName)) {
+        trialNoBySource.set(item.sourceFileName, nextTrialNo);
+        nextTrialNo += 1;
+      }
+      const trialNo = trialNoBySource.get(item.sourceFileName)!;
+      // 位置からの割り当て。1枚目=リラックス度、2枚目=集中度。
+      const positional: BrainwaveChannel = item.indexInSource === 1 ? "relax" : "focus";
+      const channels = item.guessedChannels.length > 0 ? item.guessedChannels : [positional];
+      return {
+        id: nextId("eeg-panel"),
+        customerId,
+        title: `第${trialNo}回 / ${BRAINWAVE_CHANNEL_META[channels[0]].shortLabel}`,
+        src: item.panel.objectUrl,
+        channels,
+        detectionReason:
+          item.guessedChannels.length > 0 ? item.detectionReason : "画面内の並び順から割り当て",
+        contentHash: item.contentHash,
+        measuredAt,
+        uploadedAt: new Date().toISOString().slice(0, 10),
+        note: "",
+        source: "upload",
+        scope: "trial",
+        trialNo,
+        trialLabel: `第${trialNo}回`,
+      };
+    });
 
     if (added.length > 0) {
       onScreenshotsChange((current) => [...added, ...current]);
     }
 
-    const parts = [`${added.length}枚を取り込みました`];
+    const parts = [`グラフ ${added.length}枚を切り出しました`];
     if (result.duplicates.length > 0) {
-      parts.push(`重複 ${result.duplicates.length}枚を自動で除外しました`);
+      parts.push(`重複 ${result.duplicates.length}枚を自動で除外`);
     }
     if (oversized.length > 0) parts.push(`10MB超 ${oversized.length}枚をスキップ`);
-    if (result.failures.length > 0) parts.push(`解析失敗 ${result.failures.length}枚`);
+    if (result.failures.length > 0) parts.push(`切り分け失敗 ${result.failures.length}枚`);
 
+    setSplitWarnings([
+      ...result.warnings,
+      ...result.failures.map((f) => `${f.fileName}: ${f.message}`),
+    ]);
     setIntakeSummary(parts.join(" / "));
     onToast(parts.join(" / "));
     setBusy(false);
+  }
+
+  /** 機器の表示順が固定なら、取り込んだ順に7波形を割り当てられる。 */
+  function assignByCaptureOrder() {
+    // 取り込み時に [...新しいバッチ, ...既存] の順で積むため、
+    // 直近に取り込んだ4枚分は配列の先頭から撮影順に並んでいる。
+    // ここを逆順にすると θ から割り当ててしまうので、並びはそのまま使う。
+    const inCaptureOrder = screenshots.filter((shot) => shot.customerId === customerId);
+    const assignment = new Map<string, BrainwaveChannel[]>();
+    inCaptureOrder.forEach((shot, index) => {
+      const channel = CAPTURE_ORDER[index];
+      assignment.set(shot.id, channel ? [channel] : []);
+    });
+
+    onScreenshotsChange((current) =>
+      current.map((shot) =>
+        assignment.has(shot.id)
+          ? {
+              ...shot,
+              channels: assignment.get(shot.id)!,
+              detectionReason: "撮影順から一括で割り当て",
+            }
+          : shot,
+      ),
+    );
+    onToast(`${Math.min(inCaptureOrder.length, CAPTURE_ORDER.length)}枚に撮影順で割り当てました。`);
   }
 
   function toggleScreenshotChannel(shotId: string, channel: BrainwaveChannel) {
@@ -192,6 +253,7 @@ export function BrainwaveIntakePanel({
   }
 
   function removeScreenshot(shotId: string) {
+    onCommitHistory("グラフの削除");
     onScreenshotsChange((current) => current.filter((shot) => shot.id !== shotId));
   }
 
@@ -222,7 +284,7 @@ export function BrainwaveIntakePanel({
           </h2>
           <p className="mt-1 text-xs leading-5 text-[#827690]">
             {customerName} のカルテ。iPad から書き出した CSV と測定画面のスクリーンショットを
-            紐づけます。CSV には7波形すべてを保管し、利用者向け画面にはリラックス・集中のみ出します。
+            紐づけます。CSV には7波形すべてを保管し、カルテにはリラックス度と集中度を並べます。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -240,7 +302,7 @@ export function BrainwaveIntakePanel({
           </label>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-[#d98aa8] px-3 text-xs font-bold text-white transition hover:bg-[#c87598]">
             <ImageUp className="h-4 w-4" />
-            スクショを一括取り込み
+            測定画面のスクショを取り込む
             <input
               className="sr-only"
               type="file"
@@ -281,7 +343,7 @@ export function BrainwaveIntakePanel({
               onChange={(event) => setShowInternalChannels(event.target.checked)}
               className="h-4 w-4 accent-[#8d6fd1]"
             />
-            α/β/γ/δ/θ の内部波形も表示（管理者向け）
+            α/β/γ/δ/θ のグラフも表示
           </label>
         </div>
 
@@ -382,8 +444,7 @@ export function BrainwaveIntakePanel({
 
                 {!showInternalChannels ? (
                   <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs text-[#665a78]">
-                    α/β/γ/δ/θ の5波形はCSVから取り込み済みで、カルテに保管されています。
-                    利用者向け画面には表示しません。
+                    α/β/γ/δ/θ の5波形も取り込み済みです。必要なときは上のチェックで開けます。
                   </p>
                 ) : null}
               </div>
@@ -405,11 +466,38 @@ export function BrainwaveIntakePanel({
         </div>
 
         <p className="rounded-lg bg-[#f8f5fd] p-3 text-xs leading-5 text-[#665a78]">
-          4枚まとめて選択してください。画素を比較して同じグラフの重複は自動で除外します。
-          <strong className="font-bold">波形の種類はファイル名から推定するだけ</strong>なので、
-          各カードのタグを見て正しいものに直してください。CSVを取り込んでいる場合、
-          グラフの正データはCSV側が持ちます。
+          <strong className="font-bold">7波形が揃うまで撮ったスクショを、まとめて選択してください。</strong>
+          測定画面に並ぶグラフのカードを自動で1枚ずつ切り出し、グラフごとの画像として保管します。
+          重複したグラフと、下端で切れたグラフは自動で除外します。切り抜きの手作業は不要です。
+          <br />
+          <strong className="font-bold">おすすめは iPad を縦向きにして3回撮る方法です。</strong>
+          1画面に3つ写るので、横向き（2つ×4回）より撮影回数が少なくて済みます。
+          <br />
+          <strong className="font-bold">波形の種類だけは自動で判別できません。</strong>
+          機器の表示順が毎回同じなら「撮影順で一括割り当て」が使えます。違う場合は各カードのタグで指定してください。
         </p>
+
+        {customerScreenshots.length > 0 ? (
+          <button
+            type="button"
+            onClick={assignByCaptureOrder}
+            className="flex h-9 items-center gap-2 rounded-lg border border-[#ddd6ea] bg-white px-3 text-xs font-bold text-[#4b3d6b] transition hover:border-[#8d6fd1]"
+          >
+            <Check className="h-3.5 w-3.5" />
+            撮影順で一括割り当て（リラックス → 集中 → α → β → γ → δ → θ）
+          </button>
+        ) : null}
+
+        {splitWarnings.length > 0 ? (
+          <ul className="space-y-1 rounded-lg bg-[#fdf3e3] p-3 text-xs text-[#8a6a35]">
+            {splitWarnings.map((warning) => (
+              <li key={warning} className="flex gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{warning}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         {uncoveredChannels.length > 0 && customerScreenshots.length > 0 ? (
           <p className="flex flex-wrap items-center gap-2 rounded-lg bg-[#fdf3e3] p-3 text-xs font-bold text-[#8a6a35]">
@@ -428,7 +516,7 @@ export function BrainwaveIntakePanel({
             {customerScreenshots.map((shot) => (
               <article key={shot.id} className="overflow-hidden rounded-lg border border-[#e4dff0]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={shot.src} alt={shot.title} className="h-32 w-full object-cover" />
+                <img src={shot.src} alt={shot.title} className="h-32 w-full bg-white object-contain" />
                 <div className="space-y-2 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate text-sm font-bold text-[#3b3152]">{shot.title}</p>

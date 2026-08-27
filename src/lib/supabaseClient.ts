@@ -9,6 +9,16 @@ export const isDemoModeEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "t
 
 export const hasSupabaseEnv = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = hasSupabaseEnv
-  ? createClient<Database>(supabaseUrl!, supabaseAnonKey!)
-  : null;
+/**
+ * デモモードは Supabase より優先する。
+ *
+ * 環境変数に Supabase の URL とキーが残っていても、NEXT_PUBLIC_ENABLE_DEMO_MODE=true の
+ * 間は Supabase へ一切リクエストを送らない。検証中に Supabase の利用料が発生するのを
+ * 防ぐためで、ログイン画面そのものは残したまま仮ログインで通せるようにしている。
+ *
+ * 本番運用に切り替えるときは NEXT_PUBLIC_ENABLE_DEMO_MODE を false（または未設定）にする。
+ */
+export const supabase =
+  hasSupabaseEnv && !isDemoModeEnabled
+    ? createClient<Database>(supabaseUrl!, supabaseAnonKey!)
+    : null;

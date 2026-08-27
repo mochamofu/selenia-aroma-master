@@ -43,7 +43,7 @@ export default function OperatorCustomersPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="名前・カナ・顧客番号・職業で検索"
+                placeholder="名前・カナ・利用者番号・職業で検索"
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               />
               {query ? (
@@ -74,8 +74,8 @@ export default function OperatorCustomersPage() {
             <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-[var(--admin-border)] bg-[var(--admin-primary-softer)] text-left">
-                  <th scope="col" className="px-4 py-3 font-bold">顧客</th>
-                  <th scope="col" className="px-4 py-3 font-bold">顧客番号</th>
+                  <th scope="col" className="px-4 py-3 font-bold">利用者</th>
+                  <th scope="col" className="px-4 py-3 font-bold">利用者番号</th>
                   <th scope="col" className="px-4 py-3 font-bold">属性</th>
                   <th scope="col" className="px-4 py-3 font-bold">好みの傾向</th>
                   <th scope="col" className="px-4 py-3 text-right font-bold">測定</th>
@@ -140,7 +140,7 @@ export default function OperatorCustomersPage() {
 
           {filtered.length === 0 ? (
             <p className="p-10 text-center text-sm text-[var(--admin-text-muted)]">
-              条件に合う顧客がいません。
+              条件に合う利用者がいません。
             </p>
           ) : null}
         </section>
