@@ -17,6 +17,19 @@
 | カルテ・測定・レシピ | D1（SQLite） | `DB` |
 | 測定画像 | R2 | `MEASUREMENT_IMAGES` |
 
+リソースの名前は `selenia-aroma` で頭を揃える。Cloudflare のアカウント自体が
+会社（ココロラボ）なので、個々のリソースに会社名は入れない。同じアカウントで
+別の事業を始めたときに、事業ごとに見分けられるようにしておく。
+
+| | 名前 |
+|---|---|
+| データベース | `selenia-aroma` |
+| 画像置き場 | `selenia-aroma-images` |
+| アプリ本体 | `selenia-aroma-karte` |
+
+R2 のバケット名は後から変えられない（作り直して中身を移すことになる）ため、
+最初に決めておく。
+
 容量の見積もり。切り出したグラフ1枚が約25KB、1人あたり1回の来店で14枚。
 100人が月1回来店しても月35MB程度で、無料枠に対して桁が違う。
 
@@ -44,18 +57,19 @@ Cloudflare のアカウントが必要。以下はアカウント所有者が実
 # 1. ログイン
 npx wrangler login
 
-# 2. データベースを作る
-npx wrangler d1 create selenia-karte
+# 2. データベース（作成済み。selenia-aroma / wrangler.jsonc に登録済み）
+#    新しく作り直す場合のみ:
+#    npx wrangler d1 create selenia-aroma
 #    → 出力された database_id を wrangler.jsonc に書く
 
-# 3. 画像置き場を作る
-npx wrangler r2 bucket create selenia-measurement-images
+# 3. 画像置き場を作る（未作成）
+npx wrangler r2 bucket create selenia-aroma-images
+#    → 作成したら wrangler.jsonc の r2_buckets のコメントを外す
 
-# 4. wrangler.jsonc の d1_databases / r2_buckets のコメントを外し、
-#    database_id を差し替える
+# 4. スキーマを適用する
+npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0001_init.sql
 
-# 5. スキーマを適用する
-npx wrangler d1 execute selenia-karte --remote --file db/migrations/0001_init.sql
+# 5. 施術者アカウントを作る（下の「施術者アカウントを作る」を参照）
 
 # 6. 動作確認（ローカルで Workers として動かす）
 npm run cf:preview
