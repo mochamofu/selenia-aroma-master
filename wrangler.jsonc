@@ -11,19 +11,20 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
 
-  // ここから下は Cloudflare 側でリソースを作成したあとに有効にする。
-  // 値（database_id / bucket_name）はダッシュボードまたは wrangler の
-  // 出力に表示されるものへ差し替える。docs/cloudflare-migration.md を参照。
+  // カルテ・測定・レシピの保存先。Cloudflare 側で作成済み。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "selenia-aroma",
+      "database_id": "c06d174c-ab1f-4b82-9bb1-7b69a297980d"
+    }
+  ]
+
+  // 測定画像の置き場。R2 のバケットを作成したあとに有効にする。
+  // docs/cloudflare-migration.md を参照。
   //
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "selenia-karte",
-  //     "database_id": "<作成後に差し替える>"
-  //   }
-  // ],
   // "r2_buckets": [
   //   {
   //     "binding": "MEASUREMENT_IMAGES",
