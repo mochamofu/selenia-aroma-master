@@ -141,7 +141,7 @@ export default function OperatorDashboardPage() {
                         className="border-b border-[var(--admin-border)] transition last:border-b-0 hover:bg-[var(--admin-primary-softer)]"
                       >
                         <td className="px-5 py-3">
-                          <Link href={`/operator?client=${client.id}`} className="flex items-center gap-2.5">
+                          <Link href={`/operator/karte?client=${client.id}`} className="flex items-center gap-2.5">
                             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--admin-primary-soft)] text-[var(--admin-primary-strong)]">
                               <ClipboardList className="h-4 w-4" />
                             </span>
@@ -215,7 +215,7 @@ export default function OperatorDashboardPage() {
                 <ul className="mt-3 space-y-2.5">
                   {flagged.map((client) => (
                     <li key={client.id} className="text-sm leading-5">
-                      <Link href={`/operator?client=${client.id}`} className="font-bold underline-offset-2 hover:underline">
+                      <Link href={`/operator/karte?client=${client.id}`} className="font-bold underline-offset-2 hover:underline">
                         {client.clientNumber}
                       </Link>
                       <span className="block text-xs text-[var(--admin-text-muted)]">
