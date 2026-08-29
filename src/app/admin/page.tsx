@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 // 管理者ダッシュボードはスマートフォン幅の /admin から、
-// PC・タブレット向けの /operator/dashboard へ移設した。
+// PC・タブレット向けの /operator へ移設した。
 export default function AdminRedirectPage() {
-  redirect("/operator/dashboard");
+  redirect("/operator");
 }

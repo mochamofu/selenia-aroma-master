@@ -9,7 +9,7 @@
 
 ## まず画面を開く
 
-**[管理アプリを開く](https://aroma-records-pwa.vercel.app/operator/dashboard)**
+**[管理アプリを開く](https://aroma-records-pwa.vercel.app/operator)**
 
 PC・タブレットでの利用を前提にしています。サイドバーから
 顧客カルテ / 顧客一覧 / 香り制作記録 / ベースブレンド一覧 / エッセンシャルオイル一覧
@@ -24,10 +24,10 @@ PC・タブレットでの利用を前提にしています。サイドバーか
 
 | 用途 | URL / ファイル |
 | --- | --- |
-| 公開URL | [https://aroma-records-pwa.vercel.app/operator/dashboard](https://aroma-records-pwa.vercel.app/operator/dashboard) |
-| ローカル起動 | `http://localhost:3000/operator/dashboard` |
-| 事業者向けカルテ画面 | `src/app/operator/page.tsx` |
-| 管理者ダッシュボード | `src/app/operator/dashboard/page.tsx` |
+| 公開URL（ダッシュボード） | [https://aroma-records-pwa.vercel.app/operator](https://aroma-records-pwa.vercel.app/operator) |
+| ローカル起動 | `http://localhost:3000/operator` |
+| 管理者ダッシュボード | `src/app/operator/page.tsx` |
+| 事業者向けカルテ画面 | `src/app/operator/karte/page.tsx` |
 | 仕様書（Markdown） | `docs/aroma-operator-current-capability-spec.md` |
 | 仕様書（Word） | `docs/aroma-operator-current-capability-spec.docx` |
 | 仕様書（PDF） | `docs/aroma-operator-current-capability-spec.pdf` |

@@ -9,7 +9,7 @@ import { isDemoModeEnabled } from "@/lib/supabaseClient";
 /**
  * 管理者・施術者向けアプリのログイン画面。
  *
- * ログイン後の遷移先は常に管理者アプリ（/operator/dashboard）。
+ * ログイン後の遷移先は常に管理者アプリのダッシュボード（/operator）。
  * 以前はロールで /admin と /dashboard に振り分けていたが、
  * 利用者向けアプリを別リポジトリへ分離したため分岐を廃止した。
  */
@@ -26,7 +26,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmail(email, password);
-      router.replace("/operator/dashboard");
+      router.replace("/operator");
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
