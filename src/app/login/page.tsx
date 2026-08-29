@@ -50,14 +50,16 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* デモ用のIDはメールアドレスの形をしていないため、ラベルは「ID」にしている。 */}
         <label className="block text-sm font-bold text-[var(--admin-text)]">
-          メールアドレス
+          ID（メールアドレス）
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="text"
-            inputMode="email"
-            autoComplete="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             className="mt-2 h-12 w-full rounded-lg border border-[var(--admin-border)] px-4 text-base outline-none transition focus:border-[var(--admin-primary)]"
             required
           />

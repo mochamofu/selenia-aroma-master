@@ -33,9 +33,10 @@ const DEMO_ACCOUNTS: Record<string, { password: string; role: UserRole; userId: 
     role: "admin",
     userId: "user-admin",
   },
-  // 社外共有用。内部配合比率は表示されない。
-  "partner@selenia": {
-    password: "selenia",
+  // 社外共有用（ハコスコ様）。内部配合比率は表示されない。
+  // 口頭でも伝えられるよう短くしている。共有先が増えるときは行を足す。
+  hacosco: {
+    password: "aroma",
     role: "instructor",
     userId: "user-instructor",
   },
