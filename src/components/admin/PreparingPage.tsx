@@ -66,7 +66,7 @@ export function PreparingPage({
 
           <p className="text-sm text-[var(--admin-text-muted)]">
             いま使えるのは{" "}
-            <Link href="/operator" className="font-bold text-[var(--admin-primary-strong)] underline">
+            <Link href="/operator/karte" className="font-bold text-[var(--admin-primary-strong)] underline">
               利用者カルテ
             </Link>
             ・

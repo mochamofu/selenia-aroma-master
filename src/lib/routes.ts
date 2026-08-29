@@ -4,8 +4,8 @@
  */
 export const routes = {
   login: "/login",
-  dashboard: "/operator/dashboard",
-  karte: "/operator",
+  dashboard: "/operator",
+  karte: "/operator/karte",
   customers: "/operator/customers",
   blendRecords: "/operator/blend-records",
   baseBlends: "/operator/base-blends",
