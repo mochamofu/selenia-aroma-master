@@ -2168,9 +2168,11 @@ function ClientPicker({
   // 個人情報保護の観点から、開いた時点では一覧を出さない。
   // 利用者が画面を見ている場面で他の人の氏名が並ぶのを避けるため、
   // 氏名を入力して該当した人だけを表示する。
+  // 利用者番号(CLT-00058)は他の画面に表示されるため、検索の対象に含める。
+  // 番号を見て打ったのに0件、という行き止まりを作らないようにするため。
   const filtered = q
     ? customers.filter((customer) =>
-        `${customer.name} ${customer.user_id}`.toLowerCase().includes(q),
+        `${customer.name} ${customer.id} ${customer.user_id}`.toLowerCase().includes(q),
       )
     : [];
 
