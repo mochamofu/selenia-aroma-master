@@ -742,7 +742,7 @@ export default function OperatorKartePage() {
   const [manualCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
 
-  // 利用者一覧から /operator?client=... で来たときは、その人をそのまま開く。
+  // 利用者一覧から /operator/karte?client=... で来たときは、その人をそのまま開く。
   // ここで拾わないと、一覧で選んだのにもう一度選び直す二度手間になる。
   // URL はレンダー中に読めない外部の値なので useSyncExternalStore で取り込む。
   // サーバー側は空文字を返し、ハイドレーション後に実際のクエリで再描画される。
