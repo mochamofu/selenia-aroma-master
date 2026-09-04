@@ -45,8 +45,8 @@ export function calculateAge(birthday: string, today = new Date()): number | nul
 
 export const operatorClients: OperatorClient[] = [
   {
-    id: "clt-00058",
-    clientNumber: "CLT-00058",
+    id: "clt-2600058",
+    clientNumber: "CLT-2600058",
     userId: "user-sakura",
     name: "田中 さくら",
     nameKana: "タナカ サクラ",
@@ -63,8 +63,8 @@ export const operatorClients: OperatorClient[] = [
     note: "睡眠の質改善が主訴。寝つきの悪さと夢が多いとのこと。",
   },
   {
-    id: "clt-00057",
-    clientNumber: "CLT-00057",
+    id: "clt-2600057",
+    clientNumber: "CLT-2600057",
     userId: "user-ren",
     name: "佐藤 蓮",
     nameKana: "サトウ レン",
@@ -81,8 +81,8 @@ export const operatorClients: OperatorClient[] = [
     note: "在宅勤務。午後の集中が続かないという相談。",
   },
   {
-    id: "clt-00056",
-    clientNumber: "CLT-00056",
+    id: "clt-2600056",
+    clientNumber: "CLT-2600056",
     userId: "user-mika",
     name: "鈴木 美香",
     nameKana: "スズキ ミカ",
@@ -99,8 +99,8 @@ export const operatorClients: OperatorClient[] = [
     note: "夜勤明けの切り替えに使いたいとのこと。",
   },
   {
-    id: "clt-00055",
-    clientNumber: "CLT-00055",
+    id: "clt-2600055",
+    clientNumber: "CLT-2600055",
     userId: "user-haruto",
     name: "高橋 陽斗",
     nameKana: "タカハシ ハルト",
@@ -117,8 +117,8 @@ export const operatorClients: OperatorClient[] = [
     note: "研究の追い込み時期。朝の立ち上がりを整えたい。",
   },
   {
-    id: "clt-00054",
-    clientNumber: "CLT-00054",
+    id: "clt-2600054",
+    clientNumber: "CLT-2600054",
     userId: "user-mayumi",
     name: "伊藤 真由美",
     nameKana: "イトウ マユミ",
@@ -135,8 +135,8 @@ export const operatorClients: OperatorClient[] = [
     note: "香りの好みが明確。重めの余韻を好む。",
   },
   {
-    id: "clt-00053",
-    clientNumber: "CLT-00053",
+    id: "clt-2600053",
+    clientNumber: "CLT-2600053",
     userId: "user-daisuke",
     name: "渡辺 大輔",
     nameKana: "ワタナベ ダイスケ",
@@ -153,8 +153,8 @@ export const operatorClients: OperatorClient[] = [
     note: "外出前の切り替え用。甘い香りは苦手。",
   },
   {
-    id: "clt-00052",
-    clientNumber: "CLT-00052",
+    id: "clt-2600052",
+    clientNumber: "CLT-2600052",
     userId: "user-hiromi",
     name: "中村 裕美",
     nameKana: "ナカムラ ヒロミ",
@@ -171,8 +171,8 @@ export const operatorClients: OperatorClient[] = [
     note: "産後の睡眠リズムを整えたいとの相談。",
   },
   {
-    id: "clt-00051",
-    clientNumber: "CLT-00051",
+    id: "clt-2600051",
+    clientNumber: "CLT-2600051",
     userId: "user-mai",
     name: "小林 麻衣",
     nameKana: "コバヤシ マイ",
@@ -189,8 +189,8 @@ export const operatorClients: OperatorClient[] = [
     note: "初回。香りに慣れていないため分かりやすい構成から。",
   },
   {
-    id: "clt-00050",
-    clientNumber: "CLT-00050",
+    id: "clt-2600050",
+    clientNumber: "CLT-2600050",
     userId: "user-shota",
     name: "山本 翔太",
     nameKana: "ヤマモト ショウタ",
@@ -207,8 +207,8 @@ export const operatorClients: OperatorClient[] = [
     note: "運動前の切り替え。ドライな香りを好む。",
   },
   {
-    id: "clt-00049",
-    clientNumber: "CLT-00049",
+    id: "clt-2600049",
+    clientNumber: "CLT-2600049",
     userId: "user-eriko",
     name: "伊藤 恵理子",
     nameKana: "イトウ エリコ",
@@ -225,8 +225,8 @@ export const operatorClients: OperatorClient[] = [
     note: "静かな時間に使う想定。余韻の長い香りを希望。",
   },
   {
-    id: "clt-00048",
-    clientNumber: "CLT-00048",
+    id: "clt-2600048",
+    clientNumber: "CLT-2600048",
     userId: "user-natsumi",
     name: "中村 夏美",
     nameKana: "ナカムラ ナツミ",
@@ -243,8 +243,8 @@ export const operatorClients: OperatorClient[] = [
     note: "測定日ごとに測定値の振れ幅が大きい。",
   },
   {
-    id: "clt-00047",
-    clientNumber: "CLT-00047",
+    id: "clt-2600047",
+    clientNumber: "CLT-2600047",
     userId: "user-naoto",
     name: "小林 直人",
     nameKana: "コバヤシ ナオト",
@@ -261,8 +261,8 @@ export const operatorClients: OperatorClient[] = [
     note: "長時間の作業向け。刺激が強すぎない集中系を希望。",
   },
   {
-    id: "clt-00046",
-    clientNumber: "CLT-00046",
+    id: "clt-2600046",
+    clientNumber: "CLT-2600046",
     userId: "user-daichi",
     name: "森田 大地",
     nameKana: "モリタ ダイチ",
