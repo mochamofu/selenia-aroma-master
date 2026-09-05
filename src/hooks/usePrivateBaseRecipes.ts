@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 export type PrivateBaseRecipeMap = Record<string, { ratio: string; note: string }>;
 
@@ -12,13 +11,13 @@ type FetchState = {
   error: string | null;
   /** 実際に内部比率を保持しているか。 */
   unlocked: boolean;
-  /** デモ用の架空データか、Supabase の実データか。 */
-  source: "demo" | "supabase" | null;
+  /** デモ用の架空データか、保存先から来た実データか。 */
+  source: "demo" | "database" | null;
 };
 
 /** `/api/base-blends/private` の応答。 */
 type PrivateRecipeResponse = {
-  source?: "demo" | "supabase";
+  source?: "demo" | "database";
   recipes?: Array<{ baseBlendId: string; internalRatio: string; privateNote: string }>;
   error?: string;
 };
@@ -29,7 +28,8 @@ const IDLE: FetchState = { recipes: {}, loading: false, error: null, unlocked: f
  * ベースブレンドの内部配合比率を取得する。
  *
  * 比率はクライアントのバンドルに含めず、`/api/base-blends/private` から取得する。
- * 権限判定は Supabase の RLS が行うため、UI 側のフラグを書き換えても比率は取得できない。
+ * 権限判定はサーバー側がログイン状態から行うため、UI 側のフラグを書き換えても
+ * 比率は取得できない。
  */
 export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: () => void } {
   const [state, setState] = useState<FetchState>(IDLE);
@@ -44,14 +44,8 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
 
     async function load() {
       try {
-        const headers: HeadersInit = {};
-        if (supabase) {
-          const { data } = await supabase.auth.getSession();
-          const token = data.session?.access_token;
-          if (token) headers.Authorization = `Bearer ${token}`;
-        }
-
-        const response = await fetch("/api/base-blends/private", { headers, cache: "no-store" });
+        // 権限はサーバー側が Cookie のセッションから判定する。
+        const response = await fetch("/api/base-blends/private", { cache: "no-store" });
         const body = (await response.json()) as PrivateRecipeResponse;
         if (cancelled) return;
 
@@ -77,7 +71,7 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
           loading: false,
           error: null,
           unlocked: true,
-          source: body.source === "supabase" ? "supabase" : "demo",
+          source: body.source === "database" ? "database" : "demo",
         });
       } catch (error) {
         if (cancelled) return;

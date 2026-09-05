@@ -1,86 +1,45 @@
-import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   demoPrivateBaseBlendRecipes,
-  type PrivateBaseBlendRecipe,
+  listPrivateBaseRecipes,
 } from "@/server/baseBlendPrivateRecipes";
+import { findOperatorBySession, isDatabaseReady, SESSION_COOKIE } from "@/server/operatorAuth";
 
 /**
- * ベースブレンドの内部配合比率を返す、管理者限定エンドポイント。
+ * ベースブレンドの内部配合比率を返す、管理者限定の経路。
  *
- * Supabase 接続時: 呼び出し元のアクセストークンで Supabase に問い合わせ、
- * `base_blend_private_recipes` の RLS（管理者のみ）に判定を委ねる。
- * このサーバー側にサービスロールキーは置かないので、RLS を迂回する経路は存在しない。
+ * 比率はクライアントのバンドルに含めず、ここからだけ渡す。誰が読めるかは
+ * Cookie のセッションから毎回サーバー側で引き直して判定するので、画面側の
+ * 表示フラグを書き換えても取得できない。
  *
- * デモモード時: NEXT_PUBLIC_ENABLE_DEMO_MODE=true のときはデモ用の比率を返し、
- * Supabase へは問い合わせない。本番環境ではデモモードを無効にすること。
+ * 保存先（D1）が無い環境では、画面の動きを確かめるための架空の値を返す。
+ * その場合は権限判定を通らないため、実際の比率をそこへ置かないこと。
  */
 
 export const dynamic = "force-dynamic";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-// クライアント側（supabaseClient.ts）と同じ判定にする。前後の空白は落とす。
-const isDemoModeEnabled =
-  (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
-
-function unauthorized(message: string) {
-  return NextResponse.json({ error: message }, { status: 403 });
-}
-
-export async function GET(request: Request) {
-  // デモモードは Supabase より優先する（クライアント側の supabaseClient と同じ方針）。
-  if (isDemoModeEnabled || !supabaseUrl || !supabaseAnonKey) {
-    if (!isDemoModeEnabled) {
-      return NextResponse.json(
-        { error: "Supabaseが未設定です。管理者に確認してください。" },
-        { status: 503 },
-      );
-    }
+export async function GET() {
+  // 保存先が無い環境（移行前の配信先など）は、架空の値で画面だけ動かす。
+  if (!(await isDatabaseReady())) {
     return NextResponse.json({
       source: "demo" as const,
       recipes: demoPrivateBaseBlendRecipes,
     });
   }
 
-  const authorization = request.headers.get("authorization") ?? "";
-  const accessToken = authorization.toLowerCase().startsWith("bearer ")
-    ? authorization.slice(7).trim()
-    : "";
-
-  if (!accessToken) {
-    return unauthorized("ログインが必要です。");
+  const store = await cookies();
+  const operator = await findOperatorBySession(store.get(SESSION_COOKIE)?.value ?? "");
+  if (!operator) {
+    return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+  }
+  if (operator.role !== "admin") {
+    return NextResponse.json(
+      { error: "内部配合比率を参照する権限がありません。" },
+      { status: 403 },
+    );
   }
 
-  // 匿名キー + 呼び出し元トークンで接続する。テーブルのRLSが管理者以外を弾く。
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-  });
-
-  const { data: user, error: userError } = await supabase.auth.getUser();
-  if (userError || !user?.user) {
-    return unauthorized("セッションが無効です。再度ログインしてください。");
-  }
-
-  const { data, error } = await supabase
-    .from("base_blend_private_recipes")
-    .select("base_blend_id, internal_ratio, private_note");
-
-  if (error) {
-    return unauthorized("内部配合比率を参照する権限がありません。");
-  }
-
-  const recipes: PrivateBaseBlendRecipe[] = (data ?? []).map((row) => ({
-    baseBlendId: row.base_blend_id as string,
-    internalRatio: row.internal_ratio as string,
-    privateNote: (row.private_note as string) ?? "",
-  }));
-
-  // RLS で全件弾かれた場合は空配列が返る。権限なしとして扱う。
-  if (recipes.length === 0) {
-    return unauthorized("内部配合比率を参照する権限がありません。");
-  }
-
-  return NextResponse.json({ source: "supabase" as const, recipes });
+  const recipes = await listPrivateBaseRecipes();
+  return NextResponse.json({ source: "database" as const, recipes: recipes ?? [] });
 }
