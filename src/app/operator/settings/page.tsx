@@ -8,7 +8,6 @@ import { DISCLOSURE_DESCRIPTIONS, DISCLOSURE_LABELS, disclosureLevelForRole } fr
 import { useOperatorSettings, useSaveOperatorSettings } from "@/hooks/useOperatorSettings";
 import { type OperatorSettings } from "@/lib/operatorSettings";
 import { BackupFormatError, buildBackup, countEntries, downloadBackup, restoreBackup } from "@/lib/backup";
-import { supabase } from "@/lib/supabaseClient";
 
 function Card({
   title,
@@ -338,12 +337,14 @@ function SettingsForm({
             <Database className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-primary-strong)]" />
             <div>
               <p className="text-sm font-bold">
-                {supabase ? "Supabase に接続しています" : "Supabase 未接続（この端末に保存）"}
+                {source === "database"
+                  ? "保存先に接続しています"
+                  : "保存先が未接続（この端末に保存）"}
               </p>
               <p className="mt-1 text-xs leading-5 text-[var(--admin-text-muted)]">
-                {supabase
-                  ? "カルテと制作記録は Supabase に保存されます。"
-                  : "環境変数が未設定のため、入力内容はこの端末のブラウザにだけ残ります。実在の利用者情報は入れないでください。"}
+                {source === "database"
+                  ? "カルテ・測定・制作記録・アロマレシピ・注意事項はサーバーに保存され、別の端末からも同じ内容が見えます。測定画像も同様です。"
+                  : "入力内容はこの端末のブラウザにだけ残ります。端末を替えると消えるため、実在の利用者情報は入れないでください。"}
               </p>
             </div>
           </div>
