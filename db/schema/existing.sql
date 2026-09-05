@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS brainwave_images (
   user_id text not null references profiles(user_id) on delete cascade,
   r2_key text not null unique,
   title text not null default '',
+  note text not null default '',
   measured_at text,
   created_at text not null default (datetime('now'))
 );

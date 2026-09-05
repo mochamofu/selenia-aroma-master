@@ -53,8 +53,9 @@ ALTER TABLE brainwave_images ADD COLUMN content_hash text NOT NULL DEFAULT '';
 -- 自動推定の根拠。「なぜこう判定したか」を画面に出すために残す。
 ALTER TABLE brainwave_images ADD COLUMN detection_note text NOT NULL DEFAULT '';
 
--- 施術者が手で書き足した覚え書き。
-ALTER TABLE brainwave_images ADD COLUMN note text NOT NULL DEFAULT '';
+-- 覚え書き（note）は、はじめから brainwave_images にある。ここでは足さない。
+-- 最初この行で ADD COLUMN していたが、本番では duplicate column name で
+-- 適用がまるごと失敗した。手元の写しに note が抜けていたのが原因。
 
 -- sample: 画面確認用の見本 / upload: 実際に取り込んだもの。
 ALTER TABLE brainwave_images ADD COLUMN source text NOT NULL DEFAULT 'upload';
