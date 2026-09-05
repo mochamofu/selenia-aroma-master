@@ -42,7 +42,7 @@ Cloudflare 側が仕上がるまで両方に出せる。
 - [x] `open-next.config.ts` と `wrangler.jsonc` を追加
 - [x] D1 のスキーマを用意（`db/migrations/0001_init.sql`）
 - [x] D1 のデータベースを作成し、`wrangler.jsonc` に登録
-- [ ] R2 のバケットを作成（画像の保存先。未作成）
+- [x] R2 のバケットを作成し、`wrangler.jsonc` に登録
 - [x] ログインを D1 のアカウントに置き換える
 - [x] 利用者の保存先を D1 に置き換える
 - [ ] 測定・制作記録・レシピの保存先を D1 と R2 に置き換える
@@ -63,9 +63,8 @@ npx wrangler login
 #    npx wrangler d1 create selenia-aroma
 #    → 出力された database_id を wrangler.jsonc に書く
 
-# 3. 画像置き場を作る（未作成）
-npx wrangler r2 bucket create selenia-aroma-images
-#    → 作成したら wrangler.jsonc の r2_buckets のコメントを外す
+# 3. 画像置き場（R2）
+# 作成済み（selenia-aroma-images）。wrangler.jsonc に登録済み。
 
 # 4. スキーマを適用する
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0001_init.sql

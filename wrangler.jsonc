@@ -20,15 +20,14 @@
       "database_name": "selenia-aroma",
       "database_id": "c06d174c-ab1f-4b82-9bb1-7b69a297980d"
     }
-  ]
+  ],
 
-  // 測定画像の置き場。R2 のバケットを作成したあとに、下のコメントを外す。
+  // 測定画像の置き場。Cloudflare 側で作成済み。
   // 名前はデータベース（selenia-aroma）と頭を揃えてある。
-  //
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MEASUREMENT_IMAGES",
-  //     "bucket_name": "selenia-aroma-images"
-  //   }
-  // ]
+  "r2_buckets": [
+    {
+      "binding": "MEASUREMENT_IMAGES",
+      "bucket_name": "selenia-aroma-images"
+    }
+  ]
 }
