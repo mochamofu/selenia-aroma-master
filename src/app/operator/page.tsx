@@ -1271,6 +1271,8 @@ export default function OperatorKartePage() {
           title: draft.title,
           madeOn: madeAt,
           baseBlendId: draft.baseBlendId,
+          // 識別子がベースの原簿に無い場合に備えて、名前も送る。
+          baseBlendName: allBaseBlends.find((blend) => blend.id === draft.baseBlendId)?.name ?? "",
           totalVolumeMl: draft.totalVolumeMl,
           lotNumber: "",
           makerNote: draft.makerNote,

@@ -125,11 +125,16 @@ export async function POST(request: Request) {
   const visit = await saveVisitMeasurements({
     clientId,
     operatorId: operator.id,
+    storeId: operator.storeId,
     visitedOn: typeof body.visitedOn === "string" && body.visitedOn ? body.visitedOn : today(),
     scope,
     measurements: parseMeasurements(body.measurements, scope),
   });
 
+  // 店舗が1つも無いと来店を記録できない。呼び出し側は端末内の保存へ落ちる。
+  if (!visit) {
+    return NextResponse.json({ error: "store_unavailable" }, { status: 503 });
+  }
   return NextResponse.json({ visit });
 }
 

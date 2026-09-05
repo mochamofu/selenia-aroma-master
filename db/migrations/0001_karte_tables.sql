@@ -90,7 +90,11 @@ CREATE INDEX IF NOT EXISTS idx_safety_user ON client_safety_notes(user_id);
 CREATE TABLE IF NOT EXISTS recipes (
   id             text primary key,
   name           text not null,
-  base_blend_id  text references base_blends(id) on delete set null,
+  -- ベースの識別子。base_blends への外部キーにはしない。
+  -- 画面はいま自前の識別子（base-05 など）でベースを指しており、
+  -- base_blends の id とは別物。ここを縛ると型を1件も保存できなくなる。
+  -- 画面が base_blends を読むようになったら、その id をそのまま入れられる。
+  base_blend_id  text not null default '',
   base_amount_ul real not null default 3000,
   purpose_tags   text not null default '',
   note           text not null default '',

@@ -30,6 +30,8 @@ export type OperatorAccount = {
   displayName: string;
   role: UserRole;
   location: string;
+  /** 所属店舗。店舗ごとの設定を引くのに使う。未所属なら空。 */
+  storeId: string;
 };
 
 type AccountRow = {
@@ -41,6 +43,7 @@ type AccountRow = {
   failed_attempts: number;
   locked_until: string | null;
   store_name: string | null;
+  store_id: string | null;
 };
 
 /**
@@ -60,6 +63,7 @@ function toAccount(row: AccountRow): OperatorAccount {
     displayName: row.name,
     role: toRole(row.role),
     location: row.store_name ?? "",
+    storeId: row.store_id ?? "",
   };
 }
 
@@ -84,7 +88,7 @@ export async function findOperatorByCredentials(
   const row = await db
     .prepare(
       `SELECT c.user_id, c.login_id, c.password_hash, c.failed_attempts, c.locked_until,
-              p.name, p.role, s.name AS store_name
+              p.name, p.role, p.store_id, s.name AS store_name
        FROM credentials c
        JOIN profiles p ON p.user_id = c.user_id
        LEFT JOIN stores s ON s.id = p.store_id
@@ -169,7 +173,7 @@ export async function findOperatorBySession(token: string): Promise<OperatorAcco
   const row = await db
     .prepare(
       `SELECT c.user_id, c.login_id, c.password_hash, c.failed_attempts, c.locked_until,
-              p.name, p.role, st.name AS store_name
+              p.name, p.role, p.store_id, st.name AS store_name
        FROM sessions s
        JOIN profiles p ON p.user_id = s.user_id
        JOIN credentials c ON c.user_id = s.user_id

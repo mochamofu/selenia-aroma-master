@@ -8,8 +8,10 @@ import { getDb } from "@/server/db";
  * しか無いと、別の端末や別の講師が担当したときに見落とす。見落として困る
  * 種類の情報なので、記録は必ずサーバー側に残す。
  *
+ * 人は profiles に1つの表で入っているので、user_id で紐づける。
+ *
  * 見出し（label）は1人につき重複させない。同じ注意が二重に並ぶと、
- * 一覧で確認するときに数え違いのもとになる。
+ * 一覧で確認するときに数え違いのもとになる。表の側でも重複を禁じてある。
  */
 
 export type SafetyNote = {
@@ -33,7 +35,7 @@ export async function listSafetyNotes(clientId: string): Promise<SafetyNote[] | 
 
   const rows = await db
     .prepare(
-      "SELECT id, label, severity, guidance FROM client_safety_notes WHERE client_id = ? ORDER BY created_at",
+      "SELECT id, label, severity, guidance FROM client_safety_notes WHERE user_id = ? ORDER BY created_at",
     )
     .bind(clientId)
     .all<NoteRow>();
@@ -56,14 +58,14 @@ export async function addSafetyNote(input: NewSafetyNote): Promise<SafetyNote[] 
   if (!db) return null;
 
   const existing = await db
-    .prepare("SELECT id FROM client_safety_notes WHERE client_id = ? AND label = ? LIMIT 1")
+    .prepare("SELECT id FROM client_safety_notes WHERE user_id = ? AND label = ? LIMIT 1")
     .bind(input.clientId, input.label)
     .first<{ id: string }>();
 
   if (!existing) {
     await db
       .prepare(
-        "INSERT INTO client_safety_notes (id, client_id, label, severity, guidance) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO client_safety_notes (id, user_id, label, severity, guidance) VALUES (?, ?, ?, ?, ?)",
       )
       .bind(crypto.randomUUID(), input.clientId, input.label, input.severity, input.guidance)
       .run();
@@ -81,7 +83,7 @@ export async function removeSafetyNote(
   if (!db) return null;
 
   await db
-    .prepare("DELETE FROM client_safety_notes WHERE client_id = ? AND label = ?")
+    .prepare("DELETE FROM client_safety_notes WHERE user_id = ? AND label = ?")
     .bind(clientId, label)
     .run();
   return await listSafetyNotes(clientId);

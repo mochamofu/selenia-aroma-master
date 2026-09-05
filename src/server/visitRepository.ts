@@ -8,7 +8,11 @@ import type { BrainwaveChannel, ScreenshotScope } from "@/types/brainwave";
  *
  * 「本日のセッション」はこれまで端末のブラウザにだけ置いていたため、
  * 端末を替えると消え、各地の施術者が作った記録を中央で見ることもできなかった。
- * ここをサーバー側に移す。画像の実体は R2 にあり、この表は置き場所だけ持つ。
+ *
+ * 表の対応:
+ *   visits            来店。店舗と担当者を持つ
+ *   measurements      1回の測定。リラックス度と集中度の2枚をまとめる
+ *   brainwave_images  画像1枚。実体は R2 にあり、r2_key で参照する
  */
 
 export type MeasurementImageRecord = {
@@ -41,8 +45,8 @@ export type VisitRecord = {
 
 type VisitRow = {
   id: string;
-  client_id: string;
-  visited_on: string;
+  user_id: string;
+  visited_at: string;
 };
 
 type MeasurementRow = {
@@ -57,7 +61,7 @@ type ImageRow = {
   id: string;
   measurement_id: string;
   channels: string;
-  object_key: string;
+  r2_key: string;
   content_hash: string;
   detection_note: string;
   title: string;
@@ -74,14 +78,19 @@ function parseChannels(value: string): BrainwaveChannel[] {
     .filter((part) => part.length > 0) as BrainwaveChannel[];
 }
 
-/** 一番新しい来店を1件返す。D1 が無ければ null、記録が無ければ空の配列。 */
+/** 来店日は日付だけで扱う。visited_at は時刻まで持つため、頭の10文字を使う。 */
+function toDay(value: string): string {
+  return value.slice(0, 10);
+}
+
+/** 一番新しい来店を1件返す。D1 が無ければ null、記録が無ければ null。 */
 export async function findLatestVisit(clientId: string): Promise<VisitRecord | null> {
   const db = await getDb();
   if (!db) return null;
 
   const visit = await db
     .prepare(
-      "SELECT id, client_id, visited_on FROM visits WHERE client_id = ? ORDER BY visited_on DESC, created_at DESC LIMIT 1",
+      "SELECT id, user_id, visited_at FROM visits WHERE user_id = ? ORDER BY visited_at DESC, created_at DESC LIMIT 1",
     )
     .bind(clientId)
     .first<VisitRow>();
@@ -96,7 +105,7 @@ export async function findLatestVisit(clientId: string): Promise<VisitRecord | n
     .all<MeasurementRow>();
 
   if (!measurements.results.length) {
-    return { id: visit.id, clientId: visit.client_id, visitedOn: visit.visited_on, measurements: [] };
+    return { id: visit.id, clientId: visit.user_id, visitedOn: toDay(visit.visited_at), measurements: [] };
   }
 
   // 画像は1回でまとめて引く。測定の件数だけ往復させない。
@@ -104,9 +113,9 @@ export async function findLatestVisit(clientId: string): Promise<VisitRecord | n
   const placeholders = ids.map(() => "?").join(", ");
   const images = await db
     .prepare(
-      `SELECT id, measurement_id, channels, object_key, content_hash, detection_note,
+      `SELECT id, measurement_id, channels, r2_key, content_hash, detection_note,
               title, note, source, uploaded_at
-       FROM measurement_images WHERE measurement_id IN (${placeholders})
+       FROM brainwave_images WHERE measurement_id IN (${placeholders})
        ORDER BY created_at`,
     )
     .bind(...ids)
@@ -118,7 +127,7 @@ export async function findLatestVisit(clientId: string): Promise<VisitRecord | n
     list.push({
       id: row.id,
       channels: parseChannels(row.channels),
-      objectKey: row.object_key,
+      objectKey: row.r2_key,
       contentHash: row.content_hash,
       detectionNote: row.detection_note,
       title: row.title,
@@ -131,8 +140,8 @@ export async function findLatestVisit(clientId: string): Promise<VisitRecord | n
 
   return {
     id: visit.id,
-    clientId: visit.client_id,
-    visitedOn: visit.visited_on,
+    clientId: visit.user_id,
+    visitedOn: toDay(visit.visited_at),
     measurements: measurements.results.map((row) => ({
       id: row.id,
       scope: row.scope === "decided" ? "decided" : "trial",
@@ -166,10 +175,37 @@ export type NewMeasurement = {
 export type SaveVisitInput = {
   clientId: string;
   operatorId: string;
+  storeId: string;
   visitedOn: string;
   scope: ScreenshotScope;
   measurements: NewMeasurement[];
 };
+
+/** 来店を引く。その日の記録がまだ無ければ作る。 */
+async function findOrCreateVisit(db: D1Database, input: SaveVisitInput): Promise<string | null> {
+  const existing = await db
+    .prepare("SELECT id FROM visits WHERE user_id = ? AND date(visited_at) = ? LIMIT 1")
+    .bind(input.clientId, input.visitedOn)
+    .first<{ id: string }>();
+  if (existing) return existing.id;
+
+  // 来店は店舗に属する。所属が決まらない場合は、開いている店舗の最初の1つ。
+  const store = input.storeId
+    ? { id: input.storeId }
+    : await db
+        .prepare("SELECT id FROM stores WHERE status = 'active' ORDER BY store_code LIMIT 1")
+        .first<{ id: string }>();
+  if (!store) return null;
+
+  const visitId = crypto.randomUUID();
+  await db
+    .prepare(
+      "INSERT INTO visits (id, store_id, user_id, staff_user_id, visited_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(visitId, store.id, input.clientId, input.operatorId, input.visitedOn)
+    .run();
+  return visitId;
+}
 
 /**
  * その日の測定を、指定した区分（本日の試作／決定した組み合わせ）ごと入れ替える。
@@ -182,35 +218,23 @@ export async function saveVisitMeasurements(input: SaveVisitInput): Promise<Visi
   const db = await getDb();
   if (!db) return null;
 
-  const existing = await db
-    .prepare("SELECT id FROM visits WHERE client_id = ? AND visited_on = ? LIMIT 1")
-    .bind(input.clientId, input.visitedOn)
-    .first<{ id: string }>();
-
-  const visitId = existing?.id ?? crypto.randomUUID();
-  const statements: D1PreparedStatement[] = [];
-
-  if (!existing) {
-    statements.push(
-      db
-        .prepare("INSERT INTO visits (id, client_id, operator_id, visited_on) VALUES (?, ?, ?, ?)")
-        .bind(visitId, input.clientId, input.operatorId, input.visitedOn),
-    );
-  }
+  const visitId = await findOrCreateVisit(db, input);
+  // 店舗が1つも無いと来店を記録できない。画面側は端末内の保存へ落ちる。
+  if (!visitId) return null;
 
   // 消す前に、実体を片付けるためのキーを控えておく。
   const staleKeys = await db
     .prepare(
-      `SELECT object_key FROM measurement_images
+      `SELECT r2_key FROM brainwave_images
        WHERE measurement_id IN (SELECT id FROM measurements WHERE visit_id = ? AND scope = ?)`,
     )
     .bind(visitId, input.scope)
-    .all<{ object_key: string }>();
+    .all<{ r2_key: string }>();
 
-  // measurement_images は measurements の削除に連なって消える。
-  statements.push(
+  const statements: D1PreparedStatement[] = [
+    // brainwave_images は measurements の削除に連なって消える。
     db.prepare("DELETE FROM measurements WHERE visit_id = ? AND scope = ?").bind(visitId, input.scope),
-  );
+  ];
 
   for (const measurement of input.measurements) {
     const measurementId = crypto.randomUUID();
@@ -231,13 +255,14 @@ export async function saveVisitMeasurements(input: SaveVisitInput): Promise<Visi
       ...measurement.images.map((image) =>
         db
           .prepare(
-            `INSERT INTO measurement_images
-             (id, measurement_id, channels, object_key, content_hash, detection_note,
-              title, note, source, uploaded_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO brainwave_images
+             (id, user_id, measurement_id, channels, r2_key, content_hash, detection_note,
+              title, note, source, measured_at, uploaded_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             crypto.randomUUID(),
+            input.clientId,
             measurementId,
             image.channels.join(","),
             image.objectKey,
@@ -246,6 +271,7 @@ export async function saveVisitMeasurements(input: SaveVisitInput): Promise<Visi
             image.title,
             image.note,
             image.source,
+            measurement.measuredAt,
             image.uploadedAt,
           ),
       ),
@@ -260,7 +286,7 @@ export async function saveVisitMeasurements(input: SaveVisitInput): Promise<Visi
     input.measurements.flatMap((measurement) => measurement.images.map((image) => image.objectKey)),
   );
   await deleteMeasurementImages(
-    staleKeys.results.map((row) => row.object_key).filter((key) => !keptKeys.has(key)),
+    staleKeys.results.map((row) => row.r2_key).filter((key) => !keptKeys.has(key)),
   );
 
   return await findLatestVisit(input.clientId);
@@ -276,24 +302,24 @@ export async function deleteVisitMeasurements(
   if (!db) return false;
 
   const visit = await db
-    .prepare("SELECT id FROM visits WHERE client_id = ? AND visited_on = ? LIMIT 1")
+    .prepare("SELECT id FROM visits WHERE user_id = ? AND date(visited_at) = ? LIMIT 1")
     .bind(clientId, visitedOn)
     .first<{ id: string }>();
   if (!visit) return true;
 
   const keys = await db
     .prepare(
-      `SELECT object_key FROM measurement_images
+      `SELECT r2_key FROM brainwave_images
        WHERE measurement_id IN (SELECT id FROM measurements WHERE visit_id = ? AND scope = ?)`,
     )
     .bind(visit.id, scope)
-    .all<{ object_key: string }>();
+    .all<{ r2_key: string }>();
 
   await db
     .prepare("DELETE FROM measurements WHERE visit_id = ? AND scope = ?")
     .bind(visit.id, scope)
     .run();
-  await deleteMeasurementImages(keys.results.map((row) => row.object_key));
+  await deleteMeasurementImages(keys.results.map((row) => row.r2_key));
   return true;
 }
 
@@ -307,7 +333,7 @@ export async function isRegisteredImageKey(objectKey: string): Promise<boolean> 
   const db = await getDb();
   if (!db) return false;
   const row = await db
-    .prepare("SELECT 1 AS found FROM measurement_images WHERE object_key = ? LIMIT 1")
+    .prepare("SELECT 1 AS found FROM brainwave_images WHERE r2_key = ? LIMIT 1")
     .bind(objectKey)
     .first<{ found: number }>();
   return Boolean(row);

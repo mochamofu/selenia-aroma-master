@@ -26,10 +26,12 @@ export async function GET() {
   if (!(await isDatabaseReady())) {
     return NextResponse.json({ error: "database_unavailable" }, { status: 503 });
   }
-  if (!(await currentOperator())) {
+  const operator = await currentOperator();
+  if (!operator) {
     return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
   }
-  return NextResponse.json({ settings: await getSalonSettings() });
+  // その施術者が属する店舗の設定を返す。
+  return NextResponse.json({ settings: await getSalonSettings(operator.storeId) });
 }
 
 export async function PUT(request: Request) {
@@ -73,5 +75,5 @@ export async function PUT(request: Request) {
       : DEFAULT_SALON_SETTINGS.retentionMonths,
   };
 
-  return NextResponse.json({ settings: await saveSalonSettings(settings) });
+  return NextResponse.json({ settings: await saveSalonSettings(settings, operator.storeId) });
 }

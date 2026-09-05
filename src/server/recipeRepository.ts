@@ -47,7 +47,7 @@ export async function listRecipes(): Promise<AromaRecipe[] | null> {
     .prepare(
       `SELECT r.id, r.name, r.base_blend_id, r.base_amount_ul, r.purpose_tags, r.note,
               r.created_at,
-              (SELECT COUNT(*) FROM blend_records b WHERE b.recipe_id = r.id) AS use_count
+              (SELECT COUNT(*) FROM aroma_records a WHERE a.recipe_id = r.id) AS use_count
        FROM recipes r
        ORDER BY r.created_at DESC`,
     )

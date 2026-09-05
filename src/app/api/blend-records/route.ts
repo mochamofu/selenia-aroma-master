@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     title?: unknown;
     madeOn?: unknown;
     baseBlendId?: unknown;
+    baseBlendName?: unknown;
     totalVolumeMl?: unknown;
     lotNumber?: unknown;
     makerNote?: unknown;
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
     title,
     madeOn: typeof body.madeOn === "string" ? body.madeOn : new Date().toISOString().slice(0, 10),
     baseBlendId: typeof body.baseBlendId === "string" ? body.baseBlendId : "",
+    baseBlendName: typeof body.baseBlendName === "string" ? body.baseBlendName : "",
     totalVolumeMl: Number.isFinite(Number(body.totalVolumeMl)) ? Number(body.totalVolumeMl) : 0,
     lotNumber: typeof body.lotNumber === "string" ? body.lotNumber : "",
     makerNote: typeof body.makerNote === "string" ? body.makerNote : "",
