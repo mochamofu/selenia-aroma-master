@@ -45,7 +45,8 @@ Cloudflare 側が仕上がるまで両方に出せる。
 - [x] R2 のバケットを作成し、`wrangler.jsonc` に登録
 - [x] ログインを D1 のアカウントに置き換える
 - [x] 利用者の保存先を D1 に置き換える
-- [ ] 測定・制作記録・レシピの保存先を D1 と R2 に置き換える
+- [x] 測定と測定画像の保存先を D1 と R2 に置き換える
+- [ ] レシピ・設定・禁忌注意事項の保存先を D1 に置き換える
 - [ ] Vercel から切り替え
 - [ ] Supabase の依存を削除
 
@@ -66,8 +67,9 @@ npx wrangler login
 # 3. 画像置き場（R2）
 # 作成済み（selenia-aroma-images）。wrangler.jsonc に登録済み。
 
-# 4. スキーマを適用する
+# 4. スキーマを適用する（db/migrations の順に流す）
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0001_init.sql
+npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0002_measurement_images.sql
 
 # 5. 施術者アカウントを作る（下の「施術者アカウントを作る」を参照）
 
