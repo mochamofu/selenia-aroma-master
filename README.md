@@ -7,27 +7,89 @@
 **利用者（購入者）向けアプリはこのリポジトリには含まれません。**
 別リポジトリ `mochamofu/selenia-aroma-user` が担当します。
 
-## まず画面を開く
+## アプリは2つあります
 
-**[管理アプリを開く](https://aroma-records-pwa.vercel.app/operator/dashboard)**
+このサービスは **お客様用** と **サロン運営者用** の2つのアプリでできています。
+別々のリポジトリで、別々に公開されています。**このリポジトリはサロン運営者用です。**
 
-PC・タブレットでの利用を前提にしています。サイドバーから
-顧客カルテ / 顧客一覧 / 香り制作記録 / ベースブレンド一覧 / エッセンシャルオイル一覧
-へ移動できます。
+### サロン運営者用（このリポジトリ）
 
-デモモードでは、メールアドレスに `admin` を含めると管理者、
-それ以外は認定インストラクターとしてログインします。
+| | |
+| --- | --- |
+| 公開URL | https://aroma-records-pwa.vercel.app/operator |
+| ログイン画面 | https://aroma-records-pwa.vercel.app/login |
+| 使う端末 | iPad・PC（Webアプリ） |
+| 使う人 | 施術を行うインストラクター、サロン管理者 |
+| 画面の目印 | ログイン画面に **サロン運営者用** |
+| リポジトリ | https://github.com/mochamofu/selenia-aroma-master |
+| ローカル起動 | `npm run dev` → http://localhost:3000/operator |
+
+ログイン情報（試用環境。表示されるデータはすべて架空のものです）
+
+| 用途 | ID | パスワード | 見えるもの |
+| --- | --- | --- | --- |
+| 社外共有用 | `hacosco` | `aroma` | 内部配合比率は**非表示** |
+| サロン管理者 | `admin@selenia` | `aroma` | 内部配合比率まで含めた全て |
+
+**社外へURLを送るときは社外共有用のほうを渡す。**
+共有先が増えるときは `src/lib/auth.ts` の `DEMO_ACCOUNTS` に行を足す。
+
+#### 主な画面のURL
+
+| パス | 画面 |
+| --- | --- |
+| `/operator` | ダッシュボード（ログイン後のホーム） |
+| `/operator/karte` | 利用者カルテ |
+| `/operator/karte?client=<顧客ID>` | 特定の人のカルテを直接開く |
+| `/operator/customers` | 利用者一覧 |
+| `/operator/blend-records` | 香り制作記録 |
+| `/operator/base-blends` | ベースブレンド一覧 |
+| `/operator/oils` | エッセンシャルオイル一覧 |
+| `/operator/dashboard` | `/operator` へリダイレクト（旧URLの救済） |
+
+サイドバーから同じ画面へ移動できます。
+
+### お客様用（別リポジトリ）
+
+| | |
+| --- | --- |
+| 公開URL | https://selenia-aroma-customer.vercel.app |
+| ログイン | 不要（本番認証の導入前のため、開くとそのままホームに入ります） |
+| 使う端末 | iPhone・スマートフォン（幅430pxのレイアウト） |
+| 使う人 | 測定を受けたお客様 |
+| 見えるもの | 自分の記録だけ。他のお客様の情報は一切表示されません |
+| 画面の目印 | ホーム上部に **SELENIA AROMA ／ お客様用** |
+| リポジトリ | https://github.com/mochamofu/selenia-aroma-user |
+
+### 2つのアプリの関係
+
+画面は2つに分かれますが、**データベースは1つ（Cloudflare D1）を共有します。**
+同じ顧客番号の人は、両方のアプリで同じ人として扱われます。
 
 詳しい操作手順は[非エンジニア向けデモ起動ガイド](docs/demo-start-guide.md)にまとめています。
+
+## 番号の付け方
+
+| | 表記 | 桁数 | 表すもの |
+| --- | --- | --- | --- |
+| 顧客番号 | `CLT-2600123` | 7桁 | **人**。一度発行したら一生変わらない |
+| 施術番号 | `LOT-260904-010-01` | 11桁 | **1回の測定+調香**。ボトルのロット番号を兼ねる |
+| 加盟店コード | `010` | 3桁 | 加入した順の通し番号 |
+
+`CLT` と `LOT` の接頭辞は、数字を読まなくても種類が分かるようにするためのもの。
+入力は接頭辞ありでもなしでも受け付ける（`CLT-2600123` でも `2600123` でも同じ）。
+
+**「何回目の来店か」は番号に入れない。** 来店記録を数えて出す。
+根拠は別リポジトリの `docs/numbering-design.md` を参照。
 
 ## まず見る場所
 
 | 用途 | URL / ファイル |
 | --- | --- |
-| 公開URL | [https://aroma-records-pwa.vercel.app/operator/dashboard](https://aroma-records-pwa.vercel.app/operator/dashboard) |
-| ローカル起動 | `http://localhost:3000/operator/dashboard` |
-| 事業者向けカルテ画面 | `src/app/operator/page.tsx` |
-| 管理者ダッシュボード | `src/app/operator/dashboard/page.tsx` |
+| 公開URL（ダッシュボード） | [https://aroma-records-pwa.vercel.app/operator](https://aroma-records-pwa.vercel.app/operator) |
+| ローカル起動 | `http://localhost:3000/operator` |
+| 管理者ダッシュボード | `src/app/operator/page.tsx` |
+| 事業者向けカルテ画面 | `src/app/operator/karte/page.tsx` |
 | 仕様書（Markdown） | `docs/aroma-operator-current-capability-spec.md` |
 | 仕様書（Word） | `docs/aroma-operator-current-capability-spec.docx` |
 | 仕様書（PDF） | `docs/aroma-operator-current-capability-spec.pdf` |

@@ -9,7 +9,7 @@ import { isDemoModeEnabled } from "@/lib/supabaseClient";
 /**
  * 管理者・施術者向けアプリのログイン画面。
  *
- * ログイン後の遷移先は常に管理者アプリ（/operator/dashboard）。
+ * ログイン後の遷移先は常に管理者アプリのダッシュボード（/operator）。
  * 以前はロールで /admin と /dashboard に振り分けていたが、
  * 利用者向けアプリを別リポジトリへ分離したため分岐を廃止した。
  */
@@ -26,7 +26,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmail(email, password);
-      router.replace("/operator/dashboard");
+      router.replace("/operator");
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
@@ -44,20 +44,32 @@ export default function LoginPage() {
           <span className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-[var(--admin-primary)] text-white">
             <Droplet className="h-8 w-8" />
           </span>
-          <h1 className="text-2xl font-bold text-[var(--admin-text)]">Selenia Aroma Karte</h1>
+          {/*
+            利用者向けアプリ(selenia-aroma-user)と入口の見た目が似ていて、
+            どちらを開いているのか分からないという声があったため、誰向けの
+            アプリなのかをここで言い切る。
+          */}
+          <span className="inline-flex items-center rounded-full bg-[var(--admin-primary-softer)] px-3 py-1 text-xs font-bold tracking-wide text-[var(--admin-primary-strong)]">
+            サロン運営者用
+          </span>
+          <h1 className="mt-3 text-2xl font-bold text-[var(--admin-text)]">Selenia Aroma Karte</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--admin-text-muted)]">
             脳波測定にもとづくアロマ制作の管理アプリ
+            <br />
+            <span className="text-xs">PC・タブレット向け／お客様用アプリとは別です</span>
           </p>
         </div>
 
+        {/* デモ用のIDはメールアドレスの形をしていないため、ラベルは「ID」にしている。 */}
         <label className="block text-sm font-bold text-[var(--admin-text)]">
-          メールアドレス
+          ID（メールアドレス）
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="text"
-            inputMode="email"
-            autoComplete="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             className="mt-2 h-12 w-full rounded-lg border border-[var(--admin-border)] px-4 text-base outline-none transition focus:border-[var(--admin-primary)]"
             required
           />

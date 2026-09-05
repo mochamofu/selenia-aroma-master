@@ -28,14 +28,17 @@ const STORAGE_KEY = "aroma-demo-session";
  */
 const DEMO_ACCOUNTS: Record<string, { password: string; role: UserRole; userId: string }> = {
   // サロン管理者。内部配合比率まで表示される。
+  // 試用段階なのでパスワードは社外共有用と同じ短いものにしている。
+  // 権限の差は役割(role)で付いており、パスワードの長さでは守っていない。
   "admin@selenia": {
-    password: "selenia2026",
+    password: "aroma",
     role: "admin",
     userId: "user-admin",
   },
-  // 社外共有用。内部配合比率は表示されない。
-  "partner@selenia": {
-    password: "selenia",
+  // 社外共有用（ハコスコ様）。内部配合比率は表示されない。
+  // 口頭でも伝えられるよう短くしている。共有先が増えるときは行を足す。
+  hacosco: {
+    password: "aroma",
     role: "instructor",
     userId: "user-instructor",
   },

@@ -95,7 +95,7 @@ export default function OperatorCustomersPage() {
                       className="border-b border-[var(--admin-border)] transition last:border-b-0 hover:bg-[var(--admin-primary-softer)]"
                     >
                       <td className="px-4 py-3">
-                        <Link href={`/operator?client=${client.id}`} className="flex items-center gap-3">
+                        <Link href={`/operator/karte?client=${client.id}`} className="flex items-center gap-3">
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--admin-primary-soft)] text-sm font-bold text-[var(--admin-primary-strong)]">
                             {client.name.slice(0, 1)}
                           </span>

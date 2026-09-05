@@ -20,14 +20,14 @@ export type AdminNavItem = {
 
 export const adminNavItems: AdminNavItem[] = [
   {
-    href: "/operator/dashboard",
+    href: "/operator",
     label: "ダッシュボード",
     icon: "LayoutDashboard",
     description: "サロン全体の状況をまとめて確認する",
     status: "ready",
   },
   {
-    href: "/operator",
+    href: "/operator/karte",
     label: "利用者カルテ",
     icon: "ClipboardList",
     description: "1人の利用者の測定・制作・レポートをまとめて見る",
