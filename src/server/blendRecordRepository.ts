@@ -94,6 +94,8 @@ export async function listBlendRecords(clientId: string): Promise<BlendRecord[] 
 export type NewBlendRecord = {
   clientId: string;
   operatorId: string;
+  /** どのアロマレシピ（型）から作ったか。型を使わずに作った場合は空。 */
+  recipeId: string;
   title: string;
   madeOn: string;
   baseBlendId: string;
@@ -114,8 +116,8 @@ export async function createBlendRecord(input: NewBlendRecord): Promise<string |
       .prepare(
         `INSERT INTO blend_records
          (id, client_id, visit_id, operator_id, title, made_on, base_blend_id,
-          total_volume_ml, lot_number, maker_note)
-         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+          total_volume_ml, lot_number, maker_note, recipe_id)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -127,6 +129,7 @@ export async function createBlendRecord(input: NewBlendRecord): Promise<string |
         input.totalVolumeMl,
         input.lotNumber,
         input.makerNote,
+        input.recipeId || null,
       ),
     ...input.items.map((item, index) =>
       db

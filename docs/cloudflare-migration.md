@@ -71,6 +71,7 @@ npx wrangler login
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0001_init.sql
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0002_measurement_images.sql
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0003_drop_report_scores.sql
+npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0004_blend_record_recipe.sql
 
 # 5. 施術者アカウントを作る（下の「施術者アカウントを作る」を参照）
 

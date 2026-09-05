@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     totalVolumeMl?: unknown;
     lotNumber?: unknown;
     makerNote?: unknown;
+    recipeId?: unknown;
     items?: unknown;
   };
   try {
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
     totalVolumeMl: Number.isFinite(Number(body.totalVolumeMl)) ? Number(body.totalVolumeMl) : 0,
     lotNumber: typeof body.lotNumber === "string" ? body.lotNumber : "",
     makerNote: typeof body.makerNote === "string" ? body.makerNote : "",
+    recipeId: typeof body.recipeId === "string" ? body.recipeId : "",
     items,
   });
 

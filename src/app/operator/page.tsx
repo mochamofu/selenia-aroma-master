@@ -31,10 +31,9 @@ import {
 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
+import { saveAromaRecipe, useAromaRecipes } from "@/hooks/useAromaRecipes";
 import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
 import {
-  loadRecipes,
-  saveRecipes,
   totalVolumeUl,
   type AromaRecipe,
 } from "@/lib/aromaRecipes";
@@ -785,6 +784,8 @@ export default function OperatorKartePage() {
   const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>(initialScreenshots);
   const [toast, setToast] = useState("");
   // 本日のセッションの一時保存。再読み込みで測定が消えないようにする。
+  // 読み込んだアロマレシピ。制作記録に「どの型から作ったか」を残すために持つ。
+  const [appliedRecipeId, setAppliedRecipeId] = useState("");
   const [sessionSavedAt, setSessionSavedAt] = useState("");
   // どこに保存されたか。端末内だけの保存はその旨を伝える必要がある。
   const [sessionStorageKind, setSessionStorageKind] = useState<SessionStorageKind>("device");
@@ -1076,6 +1077,8 @@ export default function OperatorKartePage() {
   /** 登録済みのレシピを配合欄へ流し込む。 */
   function applyRecipe(recipe: AromaRecipe) {
     history.commit("レシピの読み込み");
+    // どの型から作ったかを制作記録に残す。レシピの「実績」はここから数える。
+    setAppliedRecipeId(recipe.id);
     setSelectedBaseId(recipe.baseBlendId);
     setAddedOils(
       recipe.oils.map((oil, index) => ({
@@ -1107,8 +1110,13 @@ export default function OperatorKartePage() {
       createdAt: new Date().toISOString().slice(0, 10),
       outcome: { useCount: 0 },
     };
-    saveRecipes([recipe, ...loadRecipes()]);
-    setToast(`「${recipe.name}」をアロマレシピに保存しました。`);
+    void saveAromaRecipe(recipe).then((storage) => {
+      setToast(
+        storage === "database"
+          ? `「${recipe.name}」をアロマレシピに保存しました。`
+          : `「${recipe.name}」をこの端末のアロマレシピに保存しました。`,
+      );
+    });
   }
 
   /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
@@ -1228,6 +1236,7 @@ export default function OperatorKartePage() {
           totalVolumeMl: draft.totalVolumeMl,
           lotNumber: "",
           makerNote: draft.makerNote,
+          recipeId: appliedRecipeId,
           items: draft.formulaItems.map((item) => ({
             name: item.name,
             amountUl: parseVolumeUl(item.amountUl),
@@ -2121,7 +2130,7 @@ function RecipePicker({
   onSelect: (recipe: AromaRecipe) => void;
   onClose: () => void;
 }) {
-  const [recipes] = useState<AromaRecipe[]>(() => loadRecipes());
+  const { recipes } = useAromaRecipes();
   const [query, setQuery] = useState("");
 
   const visible = recipes.filter((recipe) => {

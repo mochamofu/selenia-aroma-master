@@ -6,10 +6,9 @@ import { AdminOnly } from "@/components/admin/AdminOnly";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { essentialOils } from "@/data/essentialOils";
 import { demoBaseBlends } from "@/data/mockData";
+import { useAromaRecipes } from "@/hooks/useAromaRecipes";
 import {
-  loadRecipes,
   recipeUseCount,
-  saveRecipes,
   totalVolumeUl,
   type AromaRecipe,
   type RecipeOil,
@@ -18,10 +17,9 @@ import {
 /**
  * アロマレシピ。よく使う組み合わせを型として登録しておく画面。
  *
- * いまは手で登録する。カルテの測定と制作記録が保存されるようになったら、
- * 実績（このレシピを使った回のリラックス度・集中度）を自動で集計して
- * 並べ替えられるようにする。並べ替えの基準は実際に採用した回数で、
- * 測定値を平均したり点数に均したりはしない。
+ * いまは手で登録する。制作記録が保存されるようになったら、その型を実際に
+ * 採用した回数を自動で数えて並べ替えられるようにする。数えるのは採用した
+ * 回数だけで、測定値を平均したり点数に均したりはしない。
  */
 
 const PURPOSE_PRESETS = [
@@ -246,17 +244,11 @@ function RecipeForm({
 }
 
 function RecipesBody() {
-  // localStorage はレンダー中に読めないので、初期化関数の中で読む。
-  // サーバー側では既定の型が返り、ハイドレーション後にこの端末の内容へ入れ替わる。
-  const [recipes, setRecipes] = useState<AromaRecipe[]>(() => loadRecipes());
+  // 保存先（D1）が使えればそちらを、まだ繋がっていなければこの端末を使う。
+  const { recipes, source, add, remove } = useAromaRecipes();
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [sortByUseCount, setSortByUseCount] = useState(true);
-
-  function update(next: AromaRecipe[]) {
-    setRecipes(next);
-    saveRecipes(next);
-  }
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -322,13 +314,15 @@ function RecipesBody() {
           </div>
           <p className="mt-3 text-xs leading-5 text-[var(--admin-text-muted)]">
             全 {recipes.length} 件のうち {visible.length} 件を表示中。
-            登録内容はこの端末に保存されます。
+            {source === "database"
+              ? "登録内容はサロン全体で共有されます。「実績」は制作記録から数えた採用回数です。"
+              : "いまは登録内容がこの端末にだけ保存されます。"}
           </p>
         </section>
 
         {formOpen ? (
           <RecipeForm
-            onAdd={(recipe) => update([recipe, ...recipes])}
+            onAdd={(recipe) => void add(recipe)}
             onClose={() => setFormOpen(false)}
           />
         ) : null}
@@ -358,7 +352,7 @@ function RecipesBody() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => update(recipes.filter((item) => item.id !== recipe.id))}
+                      onClick={() => void remove(recipe.id)}
                       aria-label={`${recipe.name} を削除`}
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--admin-border)] text-[var(--admin-text-muted)] transition hover:border-[var(--admin-danger)] hover:text-[var(--admin-danger)]"
                     >
