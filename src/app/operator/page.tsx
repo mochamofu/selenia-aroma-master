@@ -1105,7 +1105,7 @@ export default function OperatorKartePage() {
       purposeTags: selectedBase.benefits.slice(0, 2),
       note: makerNote,
       createdAt: new Date().toISOString().slice(0, 10),
-      outcome: { useCount: 0, relaxAverage: null, focusAverage: null },
+      outcome: { useCount: 0 },
     };
     saveRecipes([recipe, ...loadRecipes()]);
     setToast(`「${recipe.name}」をアロマレシピに保存しました。`);

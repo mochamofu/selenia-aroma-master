@@ -214,14 +214,8 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
 
         <Card
           title="利用者へ渡すレポート"
-          description="レポートに載せる範囲です。内部配合比率と5帯域の数値は、設定に関わらずレポートには載りません。"
+          description="レポートには測定画面のグラフと香りの提案内容を載せます。内部配合比率と5帯域の数値は含めません。"
         >
-          <ToggleField
-            label="リラックス値・集中値を載せる"
-            hint="外すと、香りの提案内容だけのレポートになります。"
-            checked={settings.reportIncludesScores}
-            onChange={(value) => update("reportIncludesScores", value)}
-          />
           <p className="flex items-start gap-2 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-xs leading-5 text-[var(--admin-text-muted)]">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             内部配合比率はレポート・画面の書き出しのいずれにも含めません。

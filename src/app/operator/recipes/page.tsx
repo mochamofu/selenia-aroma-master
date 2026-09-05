@@ -8,7 +8,7 @@ import { essentialOils } from "@/data/essentialOils";
 import { demoBaseBlends } from "@/data/mockData";
 import {
   loadRecipes,
-  recipeScore,
+  recipeUseCount,
   saveRecipes,
   totalVolumeUl,
   type AromaRecipe,
@@ -20,7 +20,8 @@ import {
  *
  * いまは手で登録する。カルテの測定と制作記録が保存されるようになったら、
  * 実績（このレシピを使った回のリラックス度・集中度）を自動で集計して
- * 並べ替えられるようにする。その受け皿として `outcome` を持たせてある。
+ * 並べ替えられるようにする。並べ替えの基準は実際に採用した回数で、
+ * 測定値を平均したり点数に均したりはしない。
  */
 
 const PURPOSE_PRESETS = [
@@ -85,7 +86,7 @@ function RecipeForm({
       purposeTags,
       note: note.trim(),
       createdAt: new Date().toISOString().slice(0, 10),
-      outcome: { useCount: 0, relaxAverage: null, focusAverage: null },
+      outcome: { useCount: 0 },
     });
     onClose();
   }
@@ -250,7 +251,7 @@ function RecipesBody() {
   const [recipes, setRecipes] = useState<AromaRecipe[]>(() => loadRecipes());
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [sortByScore, setSortByScore] = useState(true);
+  const [sortByUseCount, setSortByUseCount] = useState(true);
 
   function update(next: AromaRecipe[]) {
     setRecipes(next);
@@ -272,10 +273,10 @@ function RecipesBody() {
         .toLowerCase();
       return haystack.includes(q);
     });
-    return sortByScore
-      ? [...filtered].sort((a, b) => recipeScore(b) - recipeScore(a))
+    return sortByUseCount
+      ? [...filtered].sort((a, b) => recipeUseCount(b) - recipeUseCount(a))
       : [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [recipes, query, sortByScore]);
+  }, [recipes, query, sortByUseCount]);
 
   return (
     <AdminShell
@@ -312,11 +313,11 @@ function RecipesBody() {
             <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-[var(--admin-border)] px-3 text-xs font-bold">
               <input
                 type="checkbox"
-                checked={sortByScore}
-                onChange={(event) => setSortByScore(event.target.checked)}
+                checked={sortByUseCount}
+                onChange={(event) => setSortByUseCount(event.target.checked)}
                 className="h-4 w-4 accent-[var(--admin-primary)]"
               />
-              実績のある順に並べる
+              よく使う順に並べる
             </label>
           </div>
           <p className="mt-3 text-xs leading-5 text-[var(--admin-text-muted)]">
@@ -342,7 +343,7 @@ function RecipesBody() {
           <div className="grid gap-4 xl:grid-cols-2">
             {visible.map((recipe) => {
               const blend = demoBaseBlends.find((item) => item.id === recipe.baseBlendId);
-              const { useCount, relaxAverage, focusAverage } = recipe.outcome;
+              const { useCount } = recipe.outcome;
               return (
                 <article
                   key={recipe.id}
@@ -407,21 +408,11 @@ function RecipesBody() {
                       実績
                     </span>
                     {useCount === 0 ? (
-                      <span className="text-[var(--admin-text-muted)]">まだ使用記録がありません</span>
+                      <span className="text-[var(--admin-text-muted)]">まだ採用記録がありません</span>
                     ) : (
-                      <>
-                        <span className="text-[var(--admin-text-muted)]">{useCount} 回</span>
-                        {relaxAverage !== null ? (
-                          <span className="text-[var(--admin-text-muted)]">
-                            リラックス度 平均 <b className="text-[var(--admin-text)]">{relaxAverage}</b>
-                          </span>
-                        ) : null}
-                        {focusAverage !== null ? (
-                          <span className="text-[var(--admin-text-muted)]">
-                            集中度 平均 <b className="text-[var(--admin-text)]">{focusAverage}</b>
-                          </span>
-                        ) : null}
-                      </>
+                      <span className="text-[var(--admin-text-muted)]">
+                        採用 <b className="text-[var(--admin-text)]">{useCount}</b> 回
+                      </span>
                     )}
                   </div>
                 </article>
@@ -437,12 +428,12 @@ function RecipesBody() {
           </h2>
           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--admin-text-muted)]">
             <li>
-              カルテの測定と制作記録が保存されるようになったら、そのレシピを使った回の
-              リラックス度・集中度を自動で集計して「実績」に入れます。
+              制作記録が保存されるようになったら、その型を実際に採用した回数を
+              自動で数えて「実績」に入れます。
             </li>
             <li>
-              良いスコアが続いた組み合わせを候補として上に出し、カルテからそのまま
-              呼び出せるようにします。
+              よく採用している組み合わせを上に出し、カルテからそのまま呼び出せる
+              ようにします。測定値を平均したり点数に均したりはしません。
             </li>
           </ul>
         </section>

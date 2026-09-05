@@ -21,7 +21,6 @@ export type OperatorSettings = {
   /** カルテで5帯域（α〜θ）のグラフを初期表示するか。 */
   showBandsByDefault: boolean;
   /** 利用者へ渡すレポートにリラックス値・集中値を載せるか。 */
-  reportIncludesScores: boolean;
   /** 取り込んだ測定データを何か月保持するか。個人情報保護法の保管期間の考え方に合わせる。 */
   retentionMonths: number;
 };
@@ -32,7 +31,6 @@ export const DEFAULT_OPERATOR_SETTINGS: OperatorSettings = {
   measurementMinutes: 1,
   pairedMeasurement: true,
   showBandsByDefault: false,
-  reportIncludesScores: true,
   retentionMonths: 24,
 };
 

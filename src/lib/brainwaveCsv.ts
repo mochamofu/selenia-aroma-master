@@ -212,18 +212,10 @@ function normalizeTimeline(rawTimes: number[]): { timestampsSec: number[]; warni
 }
 
 function computeStats(channel: BrainwaveChannel, values: number[]): BrainwaveChannelStats {
-  const half = Math.floor(values.length / 2);
-  const firstHalf = values.slice(0, half);
-  const secondHalf = values.slice(half);
-  const mean = (list: number[]) =>
-    list.length ? list.reduce((sum, value) => sum + value, 0) / list.length : 0;
-
   return {
     channel,
     min: Math.min(...values),
     max: Math.max(...values),
-    mean: mean(values),
-    trend: mean(secondHalf) - mean(firstHalf),
     sampleCount: values.length,
   };
 }

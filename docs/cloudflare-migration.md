@@ -70,6 +70,7 @@ npx wrangler login
 # 4. スキーマを適用する（db/migrations の順に流す）
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0001_init.sql
 npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0002_measurement_images.sql
+npx wrangler d1 execute selenia-aroma --remote --file db/migrations/0003_drop_report_scores.sql
 
 # 5. 施術者アカウントを作る（下の「施術者アカウントを作る」を参照）
 

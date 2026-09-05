@@ -107,13 +107,16 @@ export type BrainwaveSeries = {
   values: number[];
 };
 
+/**
+ * 測定の範囲。実際に記録された値だけを持つ。
+ *
+ * 平均や、前半と後半をならした変化量は持たない。測定は1回ごとの推移に
+ * 意味があり、ならすと元の測定が表していたものが消えるため。
+ */
 export type BrainwaveChannelStats = {
   channel: BrainwaveChannel;
   min: number;
   max: number;
-  mean: number;
-  /** 前半平均から後半平均への変化量。測定中の推移を1値で見るための指標。 */
-  trend: number;
   sampleCount: number;
 };
 
