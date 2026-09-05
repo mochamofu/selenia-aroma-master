@@ -1,0 +1,72 @@
+# db/migrations の SQL ファイルを本番の D1 へ流す。
+#
+# 画面から SQL を貼り付けて流すと、どのファイルをどこまで適用したかが
+# 記録に残らない。ここから流せば、いつ・どのファイルを・誰が実行したかが
+# Actions の履歴に残る。
+#
+# 使い方:
+#   Actions → Apply D1 migration → Run workflow → ファイル名を入れて実行
+#
+# 必要な Secrets（画面から登録する）:
+#   CLOUDFLARE_API_TOKEN
+#   CLOUDFLARE_ACCOUNT_ID
+
+name: Apply D1 migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "db/migrations/ の中のファイル名（例: 0005_operator_tables.sql）"
+        required: true
+      confirm:
+        description: "本番のデータベースを変更します。実行するには yes と入れる"
+        required: true
+        default: "no"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 押し間違いで本番の形が変わらないよう、明示の確認を1つ挟む。
+      - name: 確認の入力を確かめる
+        if: ${{ inputs.confirm != 'yes' }}
+        run: |
+          echo "::error::confirm に yes と入れた場合だけ実行します。"
+          exit 1
+
+      # 名前に .. や / が混じっていると、意図しないファイルを読める。
+      - name: ファイル名を確かめる
+        env:
+          FILE: ${{ inputs.file }}
+        run: |
+          case "$FILE" in
+            *[/\\]*|*..*|"") echo "::error::db/migrations の中のファイル名だけを指定してください。"; exit 1 ;;
+          esac
+          test -f "db/migrations/$FILE" || { echo "::error::db/migrations/$FILE が見つかりません。"; exit 1; }
+          echo "--- 実行する内容 ---"
+          cat "db/migrations/$FILE"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: D1 へ流す
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          FILE: ${{ inputs.file }}
+        run: npx wrangler d1 execute selenia-aroma --remote --file "db/migrations/$FILE"
+
+      - name: 適用後のテーブル一覧
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute selenia-aroma --remote --json \
+            --command "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf%' ORDER BY name;"
