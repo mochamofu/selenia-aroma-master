@@ -47,13 +47,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionId = await createSession(account.id);
-  if (!sessionId) {
+  // どの端末からのログインかを監査のために控える。個人の特定には使わない。
+  const token = await createSession(account.id, request.headers.get("user-agent") ?? "");
+  if (!token) {
     return NextResponse.json({ error: "ログインを開始できませんでした。" }, { status: 500 });
   }
 
   const store = await cookies();
-  store.set(SESSION_COOKIE, sessionId, {
+  store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
