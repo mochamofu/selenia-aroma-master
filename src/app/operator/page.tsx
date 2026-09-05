@@ -1021,7 +1021,12 @@ export default function OperatorKartePage() {
     if (label) setToast(`「${label}」をやり直しました。`);
   }
 
-  /** 禁忌・注意事項を足す。 */
+  /**
+   * 禁忌・注意事項を足す。
+   *
+   * 施術の可否に直結する内容なので、画面の中だけに置かず必ずサーバーへ残す。
+   * サーバーが使えない環境では画面内の保持だけで続け、その旨を伝える。
+   */
   function addSafetyNote() {
     const value = safetyNoteDraft.trim();
     if (!value || !selectedCustomerId) return;
@@ -1036,7 +1041,28 @@ export default function OperatorKartePage() {
     }));
     setSafetyNoteDraft("");
     setSafetyNoteFormOpen(false);
-    setToast("注意事項を追加しました。");
+
+    const flag = toSafetyFlag(value);
+    void fetch("/api/safety-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: selectedCustomerId,
+        label: value,
+        severity: flag.severity,
+        guidance: flag.guidance,
+      }),
+    })
+      .then((response) => {
+        setToast(
+          response.ok
+            ? "注意事項を追加しました。"
+            : "注意事項を追加しました（この画面でのみ保持しています）。",
+        );
+      })
+      .catch(() => {
+        setToast("注意事項を追加しました（この画面でのみ保持しています）。");
+      });
   }
 
   /** 禁忌・注意事項を外す。 */
@@ -1047,7 +1073,19 @@ export default function OperatorKartePage() {
       ...current,
       [selectedCustomerId]: safetyNotes.filter((item) => item !== note),
     }));
-    setToast("注意事項を外しました。");
+
+    const query = `clientId=${encodeURIComponent(selectedCustomerId)}&label=${encodeURIComponent(note)}`;
+    void fetch(`/api/safety-notes?${query}`, { method: "DELETE" })
+      .then((response) => {
+        setToast(
+          response.ok
+            ? "注意事項を外しました。"
+            : "注意事項を外しました（この画面でのみ反映しています）。",
+        );
+      })
+      .catch(() => {
+        setToast("注意事項を外しました（この画面でのみ反映しています）。");
+      });
   }
 
   /** ヒアリングシートの回答を書き換える。元の回答は残し、上書き分だけ持つ。 */
