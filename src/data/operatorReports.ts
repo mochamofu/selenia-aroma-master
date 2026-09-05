@@ -19,8 +19,6 @@ export type ReportEntry = {
   /** 測定画面から切り出したグラフ。リラックス度と集中度の2枚だけ。 */
   relaxImage: string;
   focusImage: string;
-  relaxAverage: number;
-  focusAverage: number;
   baseBlendId: string;
   /** 追加した精油名。分量は載せない。 */
   addedOils: string[];
@@ -70,8 +68,6 @@ export const operatorReports: ReportEntry[] = operatorClients.flatMap((client, c
       measuredAt: index === 0 ? client.lastVisitAt : client.firstVisitAt,
       relaxImage: `/demo/brainwave/relax-${variant}.png`,
       focusImage: `/demo/brainwave/focus-${variant}.png`,
-      relaxAverage: 48 + ((seed * 7) % 34),
-      focusAverage: 42 + ((seed * 11) % 38),
       baseBlendId: blend.id,
       // ベースの構成精油と重ならないよう、追加分は別のリストから選ぶ。
       addedOils: essentialOils

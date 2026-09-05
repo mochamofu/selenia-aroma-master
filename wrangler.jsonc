@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "selenia-aroma-karte",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-01",
+  // Node.js の API を使うために必要。@opennextjs/cloudflare の前提。
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+
+  // カルテ・測定・レシピの保存先。Cloudflare 側で作成済み。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "selenia-aroma",
+      "database_id": "c06d174c-ab1f-4b82-9bb1-7b69a297980d"
+    }
+  ],
+
+  // 測定画像の置き場。Cloudflare 側で作成済み。
+  // 名前はデータベース（selenia-aroma）と頭を揃えてある。
+  "r2_buckets": [
+    {
+      "binding": "MEASUREMENT_IMAGES",
+      "bucket_name": "selenia-aroma-images"
+    }
+  ]
+}

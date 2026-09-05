@@ -76,6 +76,37 @@ export function getStoredSession(): AuthSession | null {
   }
 }
 
+/** サーバー側のアカウント（D1）でログインを試す。使えない環境では null。 */
+async function signInWithDatabase(
+  email: string,
+  password: string,
+): Promise<AuthSession | null> {
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    // 通信できない。呼び出し側で従来の経路へ落とす。
+    return null;
+  }
+
+  // データベース未接続。移行前の環境ではここに来る。
+  if (response.status === 503) return null;
+
+  const body = (await response.json().catch(() => ({}))) as {
+    account?: { id: string; email: string; role: UserRole };
+    error?: string;
+  };
+
+  if (!response.ok || !body.account) {
+    throw new Error(body.error ?? "ログインできませんでした。");
+  }
+  return { userId: body.account.id, email: body.account.email, role: body.account.role };
+}
+
 export async function signInWithEmail(email: string, password: string) {
   if (supabase) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -87,6 +118,14 @@ export async function signInWithEmail(email: string, password: string) {
     throw new Error("Supabaseの環境変数が未設定です。管理者に確認してください。");
   }
 
+  // サーバー側にアカウントがあればそちらを使う。移行が終わるまでは、
+  // 使えない環境でのみ下のデモ用アカウントへ落ちる。
+  const fromDatabase = await signInWithDatabase(email, password);
+  if (fromDatabase) {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fromDatabase));
+    return { user: { id: fromDatabase.userId, email }, role: fromDatabase.role };
+  }
+
   const account = resolveDemoAccount(email, password);
   const session: AuthSession = { userId: account.userId, email, role: account.role };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
@@ -95,5 +134,7 @@ export async function signInWithEmail(email: string, password: string) {
 
 export async function signOut() {
   if (supabase) await supabase.auth.signOut();
+  // サーバー側にセッションが残っていれば消す。未接続なら何も起きない。
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
   if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
 }

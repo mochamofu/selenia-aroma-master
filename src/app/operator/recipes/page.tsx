@@ -6,10 +6,9 @@ import { AdminOnly } from "@/components/admin/AdminOnly";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { essentialOils } from "@/data/essentialOils";
 import { demoBaseBlends } from "@/data/mockData";
+import { useAromaRecipes } from "@/hooks/useAromaRecipes";
 import {
-  loadRecipes,
-  recipeScore,
-  saveRecipes,
+  recipeUseCount,
   totalVolumeUl,
   type AromaRecipe,
   type RecipeOil,
@@ -18,9 +17,9 @@ import {
 /**
  * アロマレシピ。よく使う組み合わせを型として登録しておく画面。
  *
- * いまは手で登録する。カルテの測定と制作記録が保存されるようになったら、
- * 実績（このレシピを使った回のリラックス度・集中度）を自動で集計して
- * 並べ替えられるようにする。その受け皿として `outcome` を持たせてある。
+ * いまは手で登録する。制作記録が保存されるようになったら、その型を実際に
+ * 採用した回数を自動で数えて並べ替えられるようにする。数えるのは採用した
+ * 回数だけで、測定値を平均したり点数に均したりはしない。
  */
 
 const PURPOSE_PRESETS = [
@@ -85,7 +84,7 @@ function RecipeForm({
       purposeTags,
       note: note.trim(),
       createdAt: new Date().toISOString().slice(0, 10),
-      outcome: { useCount: 0, relaxAverage: null, focusAverage: null },
+      outcome: { useCount: 0 },
     });
     onClose();
   }
@@ -245,17 +244,11 @@ function RecipeForm({
 }
 
 function RecipesBody() {
-  // localStorage はレンダー中に読めないので、初期化関数の中で読む。
-  // サーバー側では既定の型が返り、ハイドレーション後にこの端末の内容へ入れ替わる。
-  const [recipes, setRecipes] = useState<AromaRecipe[]>(() => loadRecipes());
+  // 保存先（D1）が使えればそちらを、まだ繋がっていなければこの端末を使う。
+  const { recipes, source, add, remove } = useAromaRecipes();
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [sortByScore, setSortByScore] = useState(true);
-
-  function update(next: AromaRecipe[]) {
-    setRecipes(next);
-    saveRecipes(next);
-  }
+  const [sortByUseCount, setSortByUseCount] = useState(true);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -272,10 +265,10 @@ function RecipesBody() {
         .toLowerCase();
       return haystack.includes(q);
     });
-    return sortByScore
-      ? [...filtered].sort((a, b) => recipeScore(b) - recipeScore(a))
+    return sortByUseCount
+      ? [...filtered].sort((a, b) => recipeUseCount(b) - recipeUseCount(a))
       : [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [recipes, query, sortByScore]);
+  }, [recipes, query, sortByUseCount]);
 
   return (
     <AdminShell
@@ -312,22 +305,24 @@ function RecipesBody() {
             <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-[var(--admin-border)] px-3 text-xs font-bold">
               <input
                 type="checkbox"
-                checked={sortByScore}
-                onChange={(event) => setSortByScore(event.target.checked)}
+                checked={sortByUseCount}
+                onChange={(event) => setSortByUseCount(event.target.checked)}
                 className="h-4 w-4 accent-[var(--admin-primary)]"
               />
-              実績のある順に並べる
+              よく使う順に並べる
             </label>
           </div>
           <p className="mt-3 text-xs leading-5 text-[var(--admin-text-muted)]">
             全 {recipes.length} 件のうち {visible.length} 件を表示中。
-            登録内容はこの端末に保存されます。
+            {source === "database"
+              ? "登録内容はサロン全体で共有されます。「実績」は制作記録から数えた採用回数です。"
+              : "いまは登録内容がこの端末にだけ保存されます。"}
           </p>
         </section>
 
         {formOpen ? (
           <RecipeForm
-            onAdd={(recipe) => update([recipe, ...recipes])}
+            onAdd={(recipe) => void add(recipe)}
             onClose={() => setFormOpen(false)}
           />
         ) : null}
@@ -342,7 +337,7 @@ function RecipesBody() {
           <div className="grid gap-4 xl:grid-cols-2">
             {visible.map((recipe) => {
               const blend = demoBaseBlends.find((item) => item.id === recipe.baseBlendId);
-              const { useCount, relaxAverage, focusAverage } = recipe.outcome;
+              const { useCount } = recipe.outcome;
               return (
                 <article
                   key={recipe.id}
@@ -357,7 +352,7 @@ function RecipesBody() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => update(recipes.filter((item) => item.id !== recipe.id))}
+                      onClick={() => void remove(recipe.id)}
                       aria-label={`${recipe.name} を削除`}
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--admin-border)] text-[var(--admin-text-muted)] transition hover:border-[var(--admin-danger)] hover:text-[var(--admin-danger)]"
                     >
@@ -407,21 +402,11 @@ function RecipesBody() {
                       実績
                     </span>
                     {useCount === 0 ? (
-                      <span className="text-[var(--admin-text-muted)]">まだ使用記録がありません</span>
+                      <span className="text-[var(--admin-text-muted)]">まだ採用記録がありません</span>
                     ) : (
-                      <>
-                        <span className="text-[var(--admin-text-muted)]">{useCount} 回</span>
-                        {relaxAverage !== null ? (
-                          <span className="text-[var(--admin-text-muted)]">
-                            リラックス度 平均 <b className="text-[var(--admin-text)]">{relaxAverage}</b>
-                          </span>
-                        ) : null}
-                        {focusAverage !== null ? (
-                          <span className="text-[var(--admin-text-muted)]">
-                            集中度 平均 <b className="text-[var(--admin-text)]">{focusAverage}</b>
-                          </span>
-                        ) : null}
-                      </>
+                      <span className="text-[var(--admin-text-muted)]">
+                        採用 <b className="text-[var(--admin-text)]">{useCount}</b> 回
+                      </span>
                     )}
                   </div>
                 </article>
@@ -437,12 +422,12 @@ function RecipesBody() {
           </h2>
           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-[var(--admin-text-muted)]">
             <li>
-              カルテの測定と制作記録が保存されるようになったら、そのレシピを使った回の
-              リラックス度・集中度を自動で集計して「実績」に入れます。
+              制作記録が保存されるようになったら、その型を実際に採用した回数を
+              自動で数えて「実績」に入れます。
             </li>
             <li>
-              良いスコアが続いた組み合わせを候補として上に出し、カルテからそのまま
-              呼び出せるようにします。
+              よく採用している組み合わせを上に出し、カルテからそのまま呼び出せる
+              ようにします。測定値を平均したり点数に均したりはしません。
             </li>
           </ul>
         </section>

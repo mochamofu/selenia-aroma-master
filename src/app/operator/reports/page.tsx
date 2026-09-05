@@ -1,16 +1,12 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { FileText, Printer, Search, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { demoBaseBlends } from "@/data/mockData";
 import { calculateAge, operatorClients } from "@/data/operatorClients";
 import { reportsForClient, type ReportEntry } from "@/data/operatorReports";
-import {
-  getOperatorSettingsServerSnapshot,
-  getOperatorSettingsSnapshot,
-  subscribeOperatorSettings,
-} from "@/lib/operatorSettings";
+import { useOperatorSettings } from "@/hooks/useOperatorSettings";
 
 /**
  * 利用者へ渡すレポートの作成画面。
@@ -28,26 +24,8 @@ function formatDate(value: string) {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function ScoreRow({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-bold">{label}</span>
-        <span className="text-lg font-bold">{value}</span>
-      </div>
-      <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#eee9f5]">
-        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} />
-      </div>
-    </div>
-  );
-}
-
 export default function OperatorReportsPage() {
-  const settings = useSyncExternalStore(
-    subscribeOperatorSettings,
-    getOperatorSettingsSnapshot,
-    getOperatorSettingsServerSnapshot,
-  );
+  const { settings } = useOperatorSettings();
 
   const [query, setQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -231,13 +209,6 @@ export default function OperatorReportsPage() {
                   <figcaption className="mt-1.5 text-xs text-[#7b7088]">集中度</figcaption>
                 </figure>
               </div>
-
-              {settings.reportIncludesScores ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <ScoreRow label="リラックス度の平均" value={report.relaxAverage} color="#5ab4e8" />
-                  <ScoreRow label="集中度の平均" value={report.focusAverage} color="#e08a3c" />
-                </div>
-              ) : null}
 
               <p className="mt-4 text-sm leading-6">{report.comment}</p>
             </section>

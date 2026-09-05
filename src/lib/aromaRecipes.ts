@@ -7,8 +7,10 @@
  * カウンセリングのときに候補として引ける状態にしておく。
  *
  * Supabase 接続前のつなぎとして、この端末のブラウザに保存する。
- * 将来、測定スコアの実績（このレシピを使った回のリラックス度・集中度）を
- * 集計して並べ替えられるよう、`outcome` の枠を先に用意してある。
+ *
+ * 実績として持つのは「この型を実際に採用した回数」だけにする。測定値を
+ * 平均したり点数に均したりはしない。測定は1回ごとの推移に意味があり、
+ * ならしてしまうと元の測定が表していたものが消えるため。
  */
 
 export type RecipeOil = {
@@ -27,13 +29,11 @@ export type AromaRecipe = {
   note: string;
   createdAt: string;
   /**
-   * 実績。いまは手入力の想定値だけを持つ。
-   * カルテの測定と制作記録が保存されるようになったら、そこから自動で埋める。
+   * 実績。この型を実際に採用した回数。
+   * 制作記録が保存されるようになったら、そこから数える。
    */
   outcome: {
     useCount: number;
-    relaxAverage: number | null;
-    focusAverage: number | null;
   };
 };
 
@@ -53,7 +53,7 @@ export const STARTER_RECIPES: AromaRecipe[] = [
     purposeTags: ["就寝前", "緊張がほぐれない"],
     note: "香りに慣れていない方の1本目。甘さが出すぎないようフランキンセンスは少量にとどめる。",
     createdAt: "2026-04-02",
-    outcome: { useCount: 12, relaxAverage: 68, focusAverage: 41 },
+    outcome: { useCount: 12 },
   },
   {
     id: "recipe-morning-focus",
@@ -67,7 +67,7 @@ export const STARTER_RECIPES: AromaRecipe[] = [
     purposeTags: ["作業前", "集中が続かない"],
     note: "刺激が強く出やすいので、高血圧の申告がある方には別の型を使う。",
     createdAt: "2026-04-15",
-    outcome: { useCount: 9, relaxAverage: 44, focusAverage: 72 },
+    outcome: { useCount: 9 },
   },
   {
     id: "recipe-evening-reset",
@@ -81,7 +81,7 @@ export const STARTER_RECIPES: AromaRecipe[] = [
     purposeTags: ["帰宅後", "疲労感"],
     note: "重くなりすぎないよう柑橘を必ず入れる。ウッディ単独だと沈む方がいる。",
     createdAt: "2026-05-06",
-    outcome: { useCount: 7, relaxAverage: 61, focusAverage: 52 },
+    outcome: { useCount: 7 },
   },
 ];
 
@@ -107,15 +107,7 @@ export function totalVolumeUl(recipe: AromaRecipe): number {
   return recipe.baseAmountUl + recipe.oils.reduce((sum, oil) => sum + oil.amountUl, 0);
 }
 
-/**
- * 並べ替えの基準。
- * 実績のある型を上に出す。使用回数が少ないうちは信頼できないので、
- * 回数が一定に満たないものは控えめに扱う。
- */
-export function recipeScore(recipe: AromaRecipe): number {
-  const { useCount, relaxAverage, focusAverage } = recipe.outcome;
-  if (useCount === 0) return 0;
-  const best = Math.max(relaxAverage ?? 0, focusAverage ?? 0);
-  const confidence = Math.min(useCount, 10) / 10;
-  return best * confidence;
+/** 並べ替えの基準。実際に採用した回数が多い型を上に出す。 */
+export function recipeUseCount(recipe: AromaRecipe): number {
+  return recipe.outcome.useCount;
 }

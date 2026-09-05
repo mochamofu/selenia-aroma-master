@@ -16,6 +16,13 @@ type FetchState = {
   source: "demo" | "supabase" | null;
 };
 
+/** `/api/base-blends/private` の応答。 */
+type PrivateRecipeResponse = {
+  source?: "demo" | "supabase";
+  recipes?: Array<{ baseBlendId: string; internalRatio: string; privateNote: string }>;
+  error?: string;
+};
+
 const IDLE: FetchState = { recipes: {}, loading: false, error: null, unlocked: false, source: null };
 
 /**
@@ -45,7 +52,7 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
         }
 
         const response = await fetch("/api/base-blends/private", { headers, cache: "no-store" });
-        const body = await response.json();
+        const body = (await response.json()) as PrivateRecipeResponse;
         if (cancelled) return;
 
         if (!response.ok) {
@@ -53,7 +60,7 @@ export function usePrivateBaseRecipes(enabled: boolean): FetchState & { reload: 
             recipes: {},
             loading: false,
             error:
-              typeof body?.error === "string" ? body.error : "内部配合比率を取得できませんでした。",
+              typeof body.error === "string" ? body.error : "内部配合比率を取得できませんでした。",
             unlocked: false,
             source: null,
           });

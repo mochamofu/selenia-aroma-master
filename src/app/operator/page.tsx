@@ -14,7 +14,8 @@ import {
 import { AdminShell } from "@/components/admin/AdminShell";
 import { essentialOils } from "@/data/essentialOils";
 import { demoBaseBlends } from "@/data/mockData";
-import { calculateAge, operatorClients } from "@/data/operatorClients";
+import { calculateAge } from "@/data/operatorClients";
+import { useOperatorClients } from "@/hooks/useOperatorClients";
 
 /**
  * 管理者ダッシュボード。
@@ -63,6 +64,8 @@ function StatCard({
 }
 
 export default function OperatorDashboardPage() {
+  // 保存先（D1）が使えればそちらを、まだ繋がっていなければデモデータを読む。
+  const { clients: operatorClients } = useOperatorClients();
   const totalMeasurements = operatorClients.reduce((sum, c) => sum + c.measurementCount, 0);
   const totalBlends = operatorClients.reduce((sum, c) => sum + c.blendCount, 0);
   const flagged = operatorClients.filter((c) => c.safetyNotes.length > 0);

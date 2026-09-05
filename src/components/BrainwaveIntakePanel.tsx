@@ -31,11 +31,6 @@ type BrainwaveIntakePanelProps = {
   onCommitHistory: (label: string) => void;
 };
 
-function formatSigned(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return `${rounded > 0 ? "+" : ""}${rounded}`;
-}
-
 export function BrainwaveIntakePanel({
   customerId,
   customerName,
@@ -433,8 +428,8 @@ export function BrainwaveIntakePanel({
                         />
                         {stats ? (
                           <p className="px-1 text-[11px] text-[#827690]">
-                            最小 {stats.min.toFixed(1)} / 最大 {stats.max.toFixed(1)} / 前半→後半{" "}
-                            {formatSigned(stats.trend)}
+                            最小 {stats.min.toFixed(1)} / 最大 {stats.max.toFixed(1)} /{" "}
+                            {stats.sampleCount} 点
                           </p>
                         ) : null}
                       </div>

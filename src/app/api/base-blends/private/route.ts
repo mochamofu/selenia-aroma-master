@@ -20,7 +20,9 @@ export const dynamic = "force-dynamic";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const isDemoModeEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true";
+// クライアント側（supabaseClient.ts）と同じ判定にする。前後の空白は落とす。
+const isDemoModeEnabled =
+  (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
 
 function unauthorized(message: string) {
   return NextResponse.json({ error: message }, { status: 403 });

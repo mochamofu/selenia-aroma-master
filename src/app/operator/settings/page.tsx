@@ -1,19 +1,13 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { AlertTriangle, Check, Database, Download, Lock, ShieldCheck, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useViewerRole } from "@/hooks/useViewerRole";
 import { DISCLOSURE_DESCRIPTIONS, DISCLOSURE_LABELS, disclosureLevelForRole } from "@/lib/disclosure";
-import {
-  getOperatorSettingsServerSnapshot,
-  getOperatorSettingsSnapshot,
-  saveOperatorSettings,
-  subscribeOperatorSettings,
-  type OperatorSettings,
-} from "@/lib/operatorSettings";
+import { useOperatorSettings, useSaveOperatorSettings } from "@/hooks/useOperatorSettings";
+import { type OperatorSettings } from "@/lib/operatorSettings";
 import { BackupFormatError, buildBackup, countEntries, downloadBackup, restoreBackup } from "@/lib/backup";
-import { supabase } from "@/lib/supabaseClient";
 
 function Card({
   title,
@@ -92,23 +86,29 @@ function ToggleField({
 }
 
 export default function OperatorSettingsPage() {
-  // 保存済みの設定は localStorage（React の外部）にあるので同期的に購読する。
-  // サーバー描画では既定値を返し、ハイドレーション後に保存値へ切り替わる。
-  const stored = useSyncExternalStore(
-    subscribeOperatorSettings,
-    getOperatorSettingsSnapshot,
-    getOperatorSettingsServerSnapshot,
-  );
+  // サロン共通の項目はサーバー、端末の項目はブラウザから読む。
+  const { settings, source, loading } = useOperatorSettings();
+  // 読み終わる前にフォームを作ると、届いた値で編集途中が消える。
+  if (loading) return null;
   // 保存値が変わったらフォームを作り直す。編集途中の値を effect で上書きしないため。
-  return <SettingsForm key={JSON.stringify(stored)} initialSettings={stored} />;
+  return (
+    <SettingsForm key={JSON.stringify(settings)} initialSettings={settings} source={source} />
+  );
 }
 
-function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }) {
+function SettingsForm({
+  initialSettings,
+  source,
+}: {
+  initialSettings: OperatorSettings;
+  source: "database" | "device";
+}) {
   const { role, loading: roleLoading } = useViewerRole();
   const level = disclosureLevelForRole(role);
 
   const [settings, setSettings] = useState<OperatorSettings>(initialSettings);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
   const [backupError, setBackupError] = useState("");
 
@@ -146,11 +146,15 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
   const update = <K extends keyof OperatorSettings>(key: K, value: OperatorSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
     setSaved(false);
+    setSaveError("");
   };
 
-  const handleSave = () => {
-    saveOperatorSettings(settings);
-    setSaved(true);
+  const saveSettings = useSaveOperatorSettings();
+
+  const handleSave = async () => {
+    const result = await saveSettings(settings);
+    setSaveError(result.error);
+    setSaved(!result.error);
   };
 
   return (
@@ -168,6 +172,20 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
         </button>
       }
     >
+      {saveError ? (
+        <p className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-[#e8c4c4] bg-[#fdf4f4] p-3 text-xs leading-5 text-[#9a4a4a] lg:mx-6">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {saveError}この端末での表示にだけ反映しました。
+        </p>
+      ) : null}
+      {source === "device" ? (
+        <p className="mx-4 mt-4 flex items-start gap-2 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-xs leading-5 text-[var(--admin-text-muted)] lg:mx-6">
+          <Database className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          サロン名・測定の既定値・保管期間は、通常はサロン全体で揃えて保存します。
+          いまはこの端末にだけ保存されています。
+        </p>
+      ) : null}
+
       <div className="grid gap-4 p-4 lg:grid-cols-2 lg:p-6">
         <Card title="サロン情報" description="レポートや同意文面に差し込みます。">
           <TextField
@@ -214,14 +232,8 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
 
         <Card
           title="利用者へ渡すレポート"
-          description="レポートに載せる範囲です。内部配合比率と5帯域の数値は、設定に関わらずレポートには載りません。"
+          description="レポートには測定画面のグラフと香りの提案内容を載せます。内部配合比率と5帯域の数値は含めません。"
         >
-          <ToggleField
-            label="リラックス値・集中値を載せる"
-            hint="外すと、香りの提案内容だけのレポートになります。"
-            checked={settings.reportIncludesScores}
-            onChange={(value) => update("reportIncludesScores", value)}
-          />
           <p className="flex items-start gap-2 rounded-lg bg-[var(--admin-primary-softer)] p-3 text-xs leading-5 text-[var(--admin-text-muted)]">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             内部配合比率はレポート・画面の書き出しのいずれにも含めません。
@@ -325,12 +337,14 @@ function SettingsForm({ initialSettings }: { initialSettings: OperatorSettings }
             <Database className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-primary-strong)]" />
             <div>
               <p className="text-sm font-bold">
-                {supabase ? "Supabase に接続しています" : "Supabase 未接続（この端末に保存）"}
+                {source === "database"
+                  ? "保存先に接続しています"
+                  : "保存先が未接続（この端末に保存）"}
               </p>
               <p className="mt-1 text-xs leading-5 text-[var(--admin-text-muted)]">
-                {supabase
-                  ? "カルテと制作記録は Supabase に保存されます。"
-                  : "環境変数が未設定のため、入力内容はこの端末のブラウザにだけ残ります。実在の利用者情報は入れないでください。"}
+                {source === "database"
+                  ? "カルテ・測定・制作記録・アロマレシピ・注意事項はサーバーに保存され、別の端末からも同じ内容が見えます。測定画像も同様です。"
+                  : "入力内容はこの端末のブラウザにだけ残ります。端末を替えると消えるため、実在の利用者情報は入れないでください。"}
               </p>
             </div>
           </div>

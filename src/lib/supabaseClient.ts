@@ -5,7 +5,15 @@ import type { Database } from "@/types/database";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-export const isDemoModeEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true";
+/**
+ * デモモードの判定。
+ *
+ * 設定画面で値を入力するとき、前後に空白や改行が混ざることがある。
+ * 厳密一致にしていると、見た目は true でも無効になり、原因が分かりにくい。
+ * 空白を落とし、大文字小文字も問わない。
+ */
+export const isDemoModeEnabled =
+  (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
 
 export const hasSupabaseEnv = Boolean(supabaseUrl && supabaseAnonKey);
 

@@ -4,15 +4,17 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Plus, Search, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { calculateAge, operatorClients } from "@/data/operatorClients";
+import { calculateAge } from "@/data/operatorClients";
+import { useOperatorClients } from "@/hooks/useOperatorClients";
 
 export default function OperatorCustomersPage() {
   const [query, setQuery] = useState("");
   const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const { clients, source } = useOperatorClients();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return operatorClients.filter((client) => {
+    return clients.filter((client) => {
       const matchesQuery =
         q === "" ||
         `${client.name} ${client.nameKana} ${client.clientNumber} ${client.occupation}`
@@ -21,7 +23,7 @@ export default function OperatorCustomersPage() {
       const matchesFlag = !onlyFlagged || client.safetyNotes.length > 0;
       return matchesQuery && matchesFlag;
     });
-  }, [query, onlyFlagged]);
+  }, [clients, query, onlyFlagged]);
 
   return (
     <AdminShell
@@ -65,7 +67,8 @@ export default function OperatorCustomersPage() {
           </div>
 
           <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
-            全 {operatorClients.length} 名のうち {filtered.length} 名を表示中
+            全 {clients.length} 名のうち {filtered.length} 名を表示中
+            {source === "demo" ? "（表示中はデモデータです）" : ""}
           </p>
         </section>
 

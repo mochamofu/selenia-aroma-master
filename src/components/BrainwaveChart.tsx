@@ -9,8 +9,6 @@ type BrainwaveChartProps = {
   timestampsSec: number[];
   values: number[];
   height?: number;
-  /** 平均値の水平線を出す。 */
-  showMean?: boolean;
 };
 
 const VIEW_WIDTH = 640;
@@ -33,7 +31,6 @@ export function BrainwaveChart({
   timestampsSec,
   values,
   height = 180,
-  showMean = true,
 }: BrainwaveChartProps) {
   const gradientId = useId();
   const meta = BRAINWAVE_CHANNEL_META[channel];
@@ -65,13 +62,9 @@ export function BrainwaveChart({
 
     const area = `${line} L${toX(maxTime).toFixed(2)},${(PADDING.top + plotHeight).toFixed(2)} L${toX(minTime).toFixed(2)},${(PADDING.top + plotHeight).toFixed(2)} Z`;
 
-    const mean = points.reduce((sum, point) => sum + point.v, 0) / points.length;
-
     return {
       line,
       area,
-      mean,
-      meanY: toY(mean),
       low,
       high,
       minTime,
@@ -98,7 +91,7 @@ export function BrainwaveChart({
           {meta.label}
         </span>
         <span className="text-xs text-[#827690]">
-          平均 {formatValue(chart.mean)} / {meta.unitHint}
+          {formatValue(chart.low)}–{formatValue(chart.high)} / {meta.unitHint}
         </span>
       </figcaption>
 
@@ -106,7 +99,7 @@ export function BrainwaveChart({
         viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
         className="mt-2 w-full"
         role="img"
-        aria-label={`${meta.label}の推移グラフ。平均 ${formatValue(chart.mean)}。`}
+        aria-label={`${meta.label}の推移グラフ。${formatValue(chart.low)} から ${formatValue(chart.high)} の範囲。`}
         preserveAspectRatio="none"
       >
         <defs>
@@ -146,19 +139,6 @@ export function BrainwaveChart({
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
-
-        {showMean ? (
-          <line
-            x1={PADDING.left}
-            y1={chart.meanY}
-            x2={VIEW_WIDTH - PADDING.right}
-            y2={chart.meanY}
-            stroke={meta.color}
-            strokeWidth="1"
-            strokeDasharray="4 4"
-            opacity="0.6"
-          />
-        ) : null}
 
         <text x={PADDING.left} y={height - 8} fontSize="11" fill="#9a90aa">
           {formatSeconds(chart.minTime)}

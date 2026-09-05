@@ -31,19 +31,19 @@ import {
 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BrainwaveIntakePanel } from "@/components/BrainwaveIntakePanel";
+import { saveAromaRecipe, useAromaRecipes } from "@/hooks/useAromaRecipes";
 import { BrainwaveTrialGrid, groupIntoTrials } from "@/components/BrainwaveTrialGrid";
 import {
-  loadRecipes,
-  saveRecipes,
   totalVolumeUl,
   type AromaRecipe,
 } from "@/lib/aromaRecipes";
 import {
-  clearSessionDraft,
-  loadSessionDraft,
-  saveSessionDraft,
+  clearSession,
+  loadSession,
+  saveSession,
   SessionDraftTooLargeError,
-} from "@/lib/sessionDraftStore";
+  type SessionStorageKind,
+} from "@/lib/sessionStore";
 import { calculateAge as calculateClientAge, operatorClients } from "@/data/operatorClients";
 import { getBaseBlendGuide } from "@/data/baseBlendGuides";
 import { demoAromas, demoBaseBlends } from "@/data/mockData";
@@ -784,7 +784,11 @@ export default function OperatorKartePage() {
   const [brainwaveScreenshots, setBrainwaveScreenshots] = useState<BrainwaveScreenshot[]>(initialScreenshots);
   const [toast, setToast] = useState("");
   // 本日のセッションの一時保存。再読み込みで測定が消えないようにする。
+  // 読み込んだアロマレシピ。制作記録に「どの型から作ったか」を残すために持つ。
+  const [appliedRecipeId, setAppliedRecipeId] = useState("");
   const [sessionSavedAt, setSessionSavedAt] = useState("");
+  // どこに保存されたか。端末内だけの保存はその旨を伝える必要がある。
+  const [sessionStorageKind, setSessionStorageKind] = useState<SessionStorageKind>("device");
   const [sessionSaving, setSessionSaving] = useState(false);
   const restoredForCustomer = useRef("");
   // 利用者ごとの禁忌・注意事項。カルテから足したり外したりできるようにする。
@@ -817,25 +821,31 @@ export default function OperatorKartePage() {
   const decidedRows = groupIntoTrials(decidedImages);
 
   // 保存済みの本日のセッションがあれば、その利用者を開いたときに戻す。
-  // 非同期の setState なので、effect 本体で直接 setState はしない。
+  // 保存先はサーバー優先で、使えない環境ではこの端末に置いたものを見に行く。
   useEffect(() => {
     if (!selectedCustomerId) return;
     if (restoredForCustomer.current === selectedCustomerId) return;
     restoredForCustomer.current = selectedCustomerId;
-    const draft = loadSessionDraft(selectedCustomerId);
-    if (!draft || draft.screenshots.length === 0) return;
-    const apply = () => {
+    let cancelled = false;
+    void loadSession(selectedCustomerId).then((saved) => {
+      if (cancelled || !saved || saved.screenshots.length === 0) return;
       setBrainwaveScreenshots((current) => [
-        ...draft.screenshots,
+        ...saved.screenshots,
         ...current.filter(
           (shot) => !(shot.customerId === selectedCustomerId && shot.scope === "trial"),
         ),
       ]);
-      setSessionSavedAt(draft.savedAt);
-      setToast("この端末に保存していた本日のセッションを読み込みました。");
+      setSessionSavedAt(saved.savedAt);
+      setSessionStorageKind(saved.storage);
+      setToast(
+        saved.storage === "server"
+          ? "保存していた本日のセッションを読み込みました。"
+          : "この端末に保存していた本日のセッションを読み込みました。",
+      );
+    });
+    return () => {
+      cancelled = true;
     };
-    const timer = window.setTimeout(apply, 0);
-    return () => window.clearTimeout(timer);
   }, [selectedCustomerId]);
 
   const selectedBase = allBaseBlends.find((blend) => blend.id === selectedBaseId) ?? allBaseBlends[0];
@@ -926,14 +936,28 @@ export default function OperatorKartePage() {
     setAddedOils(draft.formulaItems.map((item) => ({ ...item })));
   }
 
-  /** 本日のセッションをこの端末に保存する。 */
+  /** 本日のセッションを保存する。サーバーが使えない環境ではこの端末に保存する。 */
   async function saveTodaySession() {
     if (!selectedCustomerId || sessionSaving) return;
     setSessionSaving(true);
     try {
-      const draft = await saveSessionDraft(selectedCustomerId, trialImages);
-      setSessionSavedAt(draft.savedAt);
-      setToast(`本日のセッション ${trialImages.length}枚をこの端末に保存しました。`);
+      const saved = await saveSession(selectedCustomerId, trialImages);
+      setSessionSavedAt(saved.savedAt);
+      setSessionStorageKind(saved.storage);
+      // サーバーに入った場合は、画像の参照先が入れ替わっている。
+      if (saved.storage === "server") {
+        setBrainwaveScreenshots((current) => [
+          ...saved.screenshots,
+          ...current.filter(
+            (shot) => !(shot.customerId === selectedCustomerId && shot.scope === "trial"),
+          ),
+        ]);
+      }
+      setToast(
+        saved.storage === "server"
+          ? `本日のセッション ${trialImages.length}枚を保存しました。`
+          : `本日のセッション ${trialImages.length}枚をこの端末に保存しました。`,
+      );
     } catch (error) {
       setToast(
         error instanceof SessionDraftTooLargeError
@@ -946,11 +970,11 @@ export default function OperatorKartePage() {
   }
 
   /** 保存した内容を破棄して、取り込み直しから始める。 */
-  function discardTodaySession() {
+  async function discardTodaySession() {
     if (!selectedCustomerId) return;
-    clearSessionDraft(selectedCustomerId);
+    await clearSession(selectedCustomerId);
     setSessionSavedAt("");
-    setToast("この端末に保存した本日のセッションを削除しました。");
+    setToast("保存した本日のセッションを削除しました。");
   }
 
   // 「戻る・進む」で元に戻せる範囲。1回で完結する操作だけを記録する。
@@ -997,7 +1021,12 @@ export default function OperatorKartePage() {
     if (label) setToast(`「${label}」をやり直しました。`);
   }
 
-  /** 禁忌・注意事項を足す。 */
+  /**
+   * 禁忌・注意事項を足す。
+   *
+   * 施術の可否に直結する内容なので、画面の中だけに置かず必ずサーバーへ残す。
+   * サーバーが使えない環境では画面内の保持だけで続け、その旨を伝える。
+   */
   function addSafetyNote() {
     const value = safetyNoteDraft.trim();
     if (!value || !selectedCustomerId) return;
@@ -1012,7 +1041,28 @@ export default function OperatorKartePage() {
     }));
     setSafetyNoteDraft("");
     setSafetyNoteFormOpen(false);
-    setToast("注意事項を追加しました。");
+
+    const flag = toSafetyFlag(value);
+    void fetch("/api/safety-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: selectedCustomerId,
+        label: value,
+        severity: flag.severity,
+        guidance: flag.guidance,
+      }),
+    })
+      .then((response) => {
+        setToast(
+          response.ok
+            ? "注意事項を追加しました。"
+            : "注意事項を追加しました（この画面でのみ保持しています）。",
+        );
+      })
+      .catch(() => {
+        setToast("注意事項を追加しました（この画面でのみ保持しています）。");
+      });
   }
 
   /** 禁忌・注意事項を外す。 */
@@ -1023,7 +1073,19 @@ export default function OperatorKartePage() {
       ...current,
       [selectedCustomerId]: safetyNotes.filter((item) => item !== note),
     }));
-    setToast("注意事項を外しました。");
+
+    const query = `clientId=${encodeURIComponent(selectedCustomerId)}&label=${encodeURIComponent(note)}`;
+    void fetch(`/api/safety-notes?${query}`, { method: "DELETE" })
+      .then((response) => {
+        setToast(
+          response.ok
+            ? "注意事項を外しました。"
+            : "注意事項を外しました（この画面でのみ反映しています）。",
+        );
+      })
+      .catch(() => {
+        setToast("注意事項を外しました（この画面でのみ反映しています）。");
+      });
   }
 
   /** ヒアリングシートの回答を書き換える。元の回答は残し、上書き分だけ持つ。 */
@@ -1053,6 +1115,8 @@ export default function OperatorKartePage() {
   /** 登録済みのレシピを配合欄へ流し込む。 */
   function applyRecipe(recipe: AromaRecipe) {
     history.commit("レシピの読み込み");
+    // どの型から作ったかを制作記録に残す。レシピの「実績」はここから数える。
+    setAppliedRecipeId(recipe.id);
     setSelectedBaseId(recipe.baseBlendId);
     setAddedOils(
       recipe.oils.map((oil, index) => ({
@@ -1082,10 +1146,15 @@ export default function OperatorKartePage() {
       purposeTags: selectedBase.benefits.slice(0, 2),
       note: makerNote,
       createdAt: new Date().toISOString().slice(0, 10),
-      outcome: { useCount: 0, relaxAverage: null, focusAverage: null },
+      outcome: { useCount: 0 },
     };
-    saveRecipes([recipe, ...loadRecipes()]);
-    setToast(`「${recipe.name}」をアロマレシピに保存しました。`);
+    void saveAromaRecipe(recipe).then((storage) => {
+      setToast(
+        storage === "database"
+          ? `「${recipe.name}」をアロマレシピに保存しました。`
+          : `「${recipe.name}」をこの端末のアロマレシピに保存しました。`,
+      );
+    });
   }
 
   /** 試した内容の書き換え。その回の2枚をまとめて更新する。 */
@@ -1182,6 +1251,45 @@ export default function OperatorKartePage() {
     setSavedDrafts((drafts) => [draft, ...drafts]);
     setSelectedHistory({ kind: "draft", id: draft.id });
     setToast(`${selectedCustomer?.name ?? "利用者"}の香り制作記録を保存しました。`);
+
+    // 保存先（D1）があればそちらにも残す。未接続なら画面内の保持だけで従来どおり。
+    void persistBlendRecord(draft, madeAt);
+  }
+
+  /**
+   * 制作記録をサーバー側へ保存する。
+   * これまで画面の中だけに持っていたため、再読み込みで消えていた。
+   */
+  async function persistBlendRecord(draft: SavedDraft, madeAt: string) {
+    if (!selectedClient) return;
+    try {
+      const response = await fetch("/api/blend-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: selectedClient.id,
+          title: draft.title,
+          madeOn: madeAt,
+          baseBlendId: draft.baseBlendId,
+          // 識別子がベースの原簿に無い場合に備えて、名前も送る。
+          baseBlendName: allBaseBlends.find((blend) => blend.id === draft.baseBlendId)?.name ?? "",
+          totalVolumeMl: draft.totalVolumeMl,
+          lotNumber: "",
+          makerNote: draft.makerNote,
+          recipeId: appliedRecipeId,
+          items: draft.formulaItems.map((item) => ({
+            name: item.name,
+            amountUl: parseVolumeUl(item.amountUl),
+          })),
+        }),
+      });
+      if (response.ok) {
+        setToast(`${selectedCustomer?.name ?? "利用者"}の香り制作記録を保存しました（サーバーに記録）。`);
+      }
+      // 503（未接続）と 401（未ログイン）は想定内。画面内の保持だけで続ける。
+    } catch {
+      // 通信できなくても、画面の操作は止めない。
+    }
   }
 
   function addCustomerKarte() {
@@ -1541,8 +1649,13 @@ export default function OperatorKartePage() {
                   {sessionSavedAt ? (
                     <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-[#f3effb] px-3 py-2 text-xs text-[#665a78]">
                       <Check className="h-3.5 w-3.5 shrink-0 text-[#8d6fd1]" />
-                      この端末に保存済み（{new Date(sessionSavedAt).toLocaleString("ja-JP")}）。
-                      再読み込みしても、この利用者を開くと戻ります。
+                      {sessionStorageKind === "server"
+                        ? "保存済み"
+                        : "この端末に保存済み"}
+                      （{new Date(sessionSavedAt).toLocaleString("ja-JP")}）。
+                      {sessionStorageKind === "server"
+                        ? "別の端末で開いても戻ります。"
+                        : "再読み込みしても、この利用者を開くと戻ります。"}
                       <button
                         type="button"
                         onClick={discardTodaySession}
@@ -2057,7 +2170,7 @@ function RecipePicker({
   onSelect: (recipe: AromaRecipe) => void;
   onClose: () => void;
 }) {
-  const [recipes] = useState<AromaRecipe[]>(() => loadRecipes());
+  const { recipes } = useAromaRecipes();
   const [query, setQuery] = useState("");
 
   const visible = recipes.filter((recipe) => {

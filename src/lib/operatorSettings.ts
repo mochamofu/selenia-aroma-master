@@ -1,9 +1,9 @@
 /**
  * 管理者・施術者アプリの運用設定。
  *
- * Supabase 接続前の暫定として、この端末のブラウザ（localStorage）に保存する。
- * 施術者ごとに端末が違うため、サロン共通で揃えるべき項目は将来的に
- * `salon_settings` テーブルへ移し、端末固有の項目だけをここに残す。
+ * ここが持つのは、その端末で決めればよい項目（担当者名、グラフの初期表示）。
+ * サロン全体で揃える項目——サロン名・測定の既定値・保管期間——は D1 に置く。
+ * 読み書きの入口は useOperatorSettings で、両方をまとめて扱う。
  *
  * 内部配合比率の開示可否はここでは扱わない。表示制御はロール、実データの
  * 取得可否は Supabase の RLS で決まる（`src/lib/disclosure.ts` を参照）。
@@ -20,8 +20,6 @@ export type OperatorSettings = {
   pairedMeasurement: boolean;
   /** カルテで5帯域（α〜θ）のグラフを初期表示するか。 */
   showBandsByDefault: boolean;
-  /** 利用者へ渡すレポートにリラックス値・集中値を載せるか。 */
-  reportIncludesScores: boolean;
   /** 取り込んだ測定データを何か月保持するか。個人情報保護法の保管期間の考え方に合わせる。 */
   retentionMonths: number;
 };
@@ -32,7 +30,6 @@ export const DEFAULT_OPERATOR_SETTINGS: OperatorSettings = {
   measurementMinutes: 1,
   pairedMeasurement: true,
   showBandsByDefault: false,
-  reportIncludesScores: true,
   retentionMonths: 24,
 };
 
