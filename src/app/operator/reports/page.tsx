@@ -1,16 +1,12 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { FileText, Printer, Search, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { demoBaseBlends } from "@/data/mockData";
 import { calculateAge, operatorClients } from "@/data/operatorClients";
 import { reportsForClient, type ReportEntry } from "@/data/operatorReports";
-import {
-  getOperatorSettingsServerSnapshot,
-  getOperatorSettingsSnapshot,
-  subscribeOperatorSettings,
-} from "@/lib/operatorSettings";
+import { useOperatorSettings } from "@/hooks/useOperatorSettings";
 
 /**
  * 利用者へ渡すレポートの作成画面。
@@ -29,11 +25,7 @@ function formatDate(value: string) {
 }
 
 export default function OperatorReportsPage() {
-  const settings = useSyncExternalStore(
-    subscribeOperatorSettings,
-    getOperatorSettingsSnapshot,
-    getOperatorSettingsServerSnapshot,
-  );
+  const { settings } = useOperatorSettings();
 
   const [query, setQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
